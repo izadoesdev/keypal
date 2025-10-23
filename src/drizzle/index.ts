@@ -1,5 +1,5 @@
 /**
- * Drizzle schema generator for better-api-keys
+ * Drizzle schema generator for keypal
  * 
  * This module provides utilities to generate Drizzle ORM schemas
  * for API key storage without manual boilerplate.
@@ -19,7 +19,7 @@ export interface DrizzleSchemaOptions {
  * 
  * @example
  * ```ts
- * import { createDrizzleSchema } from 'better-api-keys/drizzle'
+ * import { createDrizzleSchema } from 'keypal/drizzle'
  * 
  * export const apikey = createDrizzleSchema()
  * ```
@@ -71,7 +71,7 @@ export function createDrizzleSchema(options: DrizzleSchemaOptions = {}): string 
  * 
  * @example
  * ```ts
- * import { createApiKeyTable } from 'better-api-keys/drizzle'
+ * import { createApiKeyTable } from 'keypal/drizzle'
  * 
  * export const apikey = createApiKeyTable()
  * ```

@@ -1,8 +1,8 @@
-# better-api-keys
+# keypal
 
-[![Test](https://github.com/izadoesdev/better-api-keys/actions/workflows/test.yml/badge.svg)](https://github.com/izadoesdev/better-api-keys/actions/workflows/test.yml)
-[![Benchmark](https://github.com/izadoesdev/better-api-keys/actions/workflows/benchmark.yml/badge.svg)](https://github.com/izadoesdev/better-api-keys/actions/workflows/benchmark.yml)
-[![npm version](https://badge.fury.io/js/better-api-keys.svg)](https://badge.fury.io/js/better-api-keys)
+[![Test](https://github.com/izadoesdev/keypal/actions/workflows/test.yml/badge.svg)](https://github.com/izadoesdev/keypal/actions/workflows/test.yml)
+[![Benchmark](https://github.com/izadoesdev/keypal/actions/workflows/benchmark.yml/badge.svg)](https://github.com/izadoesdev/keypal/actions/workflows/benchmark.yml)
+[![npm version](https://badge.fury.io/js/keypal.svg)](https://badge.fury.io/js/keypal)
 
 A TypeScript library for secure API key management with cryptographic hashing, expiration, scopes, and pluggable storage.
 
@@ -20,15 +20,15 @@ A TypeScript library for secure API key management with cryptographic hashing, e
 ## Installation
 
 ```bash
-npm install better-api-keys
+npm install keypal
 # or
-bun add better-api-keys
+bun add keypal
 ```
 
 ## Quick Start
 
 ```typescript
-import { createKeys } from 'better-api-keys'
+import { createKeys } from 'keypal'
 
 const keys = createKeys({
   prefix: 'sk_',
@@ -205,7 +205,7 @@ const keys = createKeys({
 ### Drizzle ORM
 
 ```typescript
-import { DrizzleStore } from 'better-api-keys/storage/drizzle'
+import { DrizzleStore } from 'keypal/storage/drizzle'
 
 const keys = createKeys({
   prefix: 'sk_',
@@ -223,7 +223,7 @@ const keys = createKeys({
 ### Custom Storage
 
 ```typescript
-import { type Storage } from 'better-api-keys'
+import { type Storage } from 'keypal'
 
 const customStorage: Storage = {
   save: async (record) => { /* ... */ },
@@ -244,7 +244,7 @@ const keys = createKeys({
 
 ```typescript
 import { Hono } from 'hono'
-import { createKeys } from 'better-api-keys'
+import { createKeys } from 'keypal'
 import Redis from 'ioredis'
 
 const redis = new Redis()

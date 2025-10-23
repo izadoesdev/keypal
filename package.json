@@ -1,6 +1,6 @@
 {
-  "name": "better-api-keys",
-  "version": "0.0.10",
+  "name": "keypal",
+  "version": "0.0.0",
   "type": "module",
   "main": "./dist/index.cjs",
   "module": "./dist/index.mjs",

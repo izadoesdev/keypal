@@ -57,7 +57,7 @@ export class ApiKeyManager {
                 const { RedisStore } = require('./storage/redis')
                 this.storage = new RedisStore({ client: config.redis })
             } catch (error) {
-                console.error('[better-api-keys] CRITICAL: Failed to initialize Redis storage:', error)
+                console.error('[keypal] CRITICAL: Failed to initialize Redis storage:', error)
                 throw error
             }
         } else if (config.storage && typeof config.storage === 'object') {
@@ -80,7 +80,7 @@ export class ApiKeyManager {
                 const { RedisCache } = require('./core/cache')
                 this.cache = new RedisCache(config.redis)
             } catch (error) {
-                console.error('[better-api-keys] CRITICAL: Failed to initialize Redis cache:', error)
+                console.error('[keypal] CRITICAL: Failed to initialize Redis cache:', error)
                 throw error
             }
         } else if (config.cache === true) {
@@ -184,13 +184,13 @@ export class ApiKeyManager {
                     // Track usage if enabled
                     if (this.autoTrackUsage && !options.skipTracking) {
                         this.updateLastUsed(record.id).catch((err) => {
-                            console.error('[better-api-keys] Failed to track usage:', err)
+                            console.error('[keypal] Failed to track usage:', err)
                         })
                     }
 
                     return { valid: true, record }
                 } catch (error) {
-                    console.error('[better-api-keys] CRITICAL: Cache corruption detected, invalidating entry:', error)
+                    console.error('[keypal] CRITICAL: Cache corruption detected, invalidating entry:', error)
                     await this.cache.del(`apikey:${keyHash}`)
                 }
             }
@@ -225,14 +225,14 @@ export class ApiKeyManager {
             try {
                 await this.cache.set(`apikey:${keyHash}`, JSON.stringify(record), this.cacheTtl)
             } catch (error) {
-                console.error('[better-api-keys] CRITICAL: Failed to write to cache:', error)
+                console.error('[keypal] CRITICAL: Failed to write to cache:', error)
             }
         }
 
         // Track usage if enabled
         if (this.autoTrackUsage && !options.skipTracking) {
             this.updateLastUsed(record.id).catch((err) => {
-                console.error('[better-api-keys] Failed to track usage:', err)
+                console.error('[keypal] Failed to track usage:', err)
             })
         }
 
@@ -290,7 +290,7 @@ export class ApiKeyManager {
             try {
                 await this.cache.del(`apikey:${record.keyHash}`)
             } catch (error) {
-                console.error('[better-api-keys] CRITICAL: Failed to invalidate cache on revoke:', error)
+                console.error('[keypal] CRITICAL: Failed to invalidate cache on revoke:', error)
             }
         }
 
@@ -301,7 +301,7 @@ export class ApiKeyManager {
                     await (this.storage as any).setTtl(id, this.revokedKeyTtl)
                 }
             } catch (error) {
-                console.error('[better-api-keys] Failed to set TTL on revoked key:', error)
+                console.error('[keypal] Failed to set TTL on revoked key:', error)
             }
         }
     }
@@ -326,7 +326,7 @@ export class ApiKeyManager {
             try {
                 await this.cache.del(`apikey:${record.keyHash}`)
             } catch (error) {
-                console.error('[better-api-keys] CRITICAL: Failed to invalidate cache on enable:', error)
+                console.error('[keypal] CRITICAL: Failed to invalidate cache on enable:', error)
             }
         }
     }
@@ -345,7 +345,7 @@ export class ApiKeyManager {
             try {
                 await this.cache.del(`apikey:${record.keyHash}`)
             } catch (error) {
-                console.error('[better-api-keys] CRITICAL: Failed to invalidate cache on disable:', error)
+                console.error('[keypal] CRITICAL: Failed to invalidate cache on disable:', error)
             }
         }
     }
@@ -374,7 +374,7 @@ export class ApiKeyManager {
             try {
                 await this.cache.del(`apikey:${oldRecord.keyHash}`)
             } catch (error) {
-                console.error('[better-api-keys] CRITICAL: Failed to invalidate cache on rotate:', error)
+                console.error('[keypal] CRITICAL: Failed to invalidate cache on rotate:', error)
             }
         }
 
@@ -385,7 +385,7 @@ export class ApiKeyManager {
                     await (this.storage as any).setTtl(id, this.revokedKeyTtl)
                 }
             } catch (error) {
-                console.error('[better-api-keys] Failed to set TTL on rotated key:', error)
+                console.error('[keypal] Failed to set TTL on rotated key:', error)
             }
         }
 
@@ -403,7 +403,7 @@ export class ApiKeyManager {
             try {
                 await this.cache.del(`apikey:${keyHash}`)
             } catch (error) {
-                console.error('[better-api-keys] CRITICAL: Failed to invalidate cache:', error)
+                console.error('[keypal] CRITICAL: Failed to invalidate cache:', error)
                 throw error
             }
         }

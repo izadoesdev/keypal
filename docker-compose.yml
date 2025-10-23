@@ -1,14 +1,14 @@
 services:
   redis:
     image: redis:7-alpine
-    container_name: better-api-keys-redis
+    container_name: keypal-redis
     ports:
       - "6379:6379"
     volumes:
       - redis-data:/data
     command: redis-server --appendonly yes
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: [ "CMD", "redis-cli", "ping" ]
       interval: 5s
       timeout: 3s
       retries: 5

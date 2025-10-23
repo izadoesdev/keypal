@@ -1,5 +1,5 @@
-Perfect. Let’s write a clear **PRD (Product Requirements Document)** for your `better-api-keys` package.
-This will outline what it is, who it’s for, and exactly what features should be built in the **MVP**, what can come later, and what’s purely optional polish.
+Perfect. Let's write a clear **PRD (Product Requirements Document)** for your `keypal` package.
+This will outline what it is, who it's for, and exactly what features should be built in the **MVP**, what can come later, and what's purely optional polish.
 
 ---
 
@@ -7,7 +7,7 @@ This will outline what it is, who it’s for, and exactly what features should b
 
 ### **Product Name**
 
-**better-api-keys**
+**keypal**
 
 ### **Summary**
 
@@ -112,7 +112,7 @@ It can be **generated**, **hashed**, **validated**, and optionally **stored** wi
 ## 📦 **Example API**
 
 ```ts
-import { createApiKeyManager } from "better-api-keys"
+import { createApiKeyManager } from "keypal"
 
 // Initialize once with your configuration
 const apiKeys = createApiKeyManager({

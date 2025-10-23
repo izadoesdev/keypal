@@ -251,7 +251,7 @@ describe('RedisStore', () => {
         it('should use custom key prefix', async () => {
             const customStore = new RedisStore({
                 client: redis,
-                keyPrefix: 'custom:'
+                prefix: 'custom:'
             })
 
             const record: ApiKeyRecord = {

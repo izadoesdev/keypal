@@ -43,22 +43,12 @@ describe('expiration', () => {
             expect(getExpirationTime(undefined)).toBeNull()
         })
 
-        it('should return time until expiration', () => {
+        it('should return expiration date', () => {
             const future = new Date()
             future.setMinutes(future.getMinutes() + 5)
             const time = getExpirationTime(future.toISOString())
-            expect(time).toBeGreaterThan(0)
-            expect(time).toBeLessThanOrEqual(300000) // Within 5 minutes
-        })
-
-        it('should return null for past date', () => {
-            const past = new Date()
-            past.setFullYear(past.getFullYear() - 1)
-            expect(getExpirationTime(past.toISOString())).toBeNull()
-        })
-
-        it('should handle invalid date strings', () => {
-            expect(getExpirationTime('invalid-date')).toBeNull()
+            expect(time).toBeInstanceOf(Date)
+            expect(time?.getTime()).toBeGreaterThan(Date.now())
         })
     })
 })

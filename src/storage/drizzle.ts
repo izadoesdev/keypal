@@ -2,13 +2,9 @@ import type { Storage, DrizzleColumnMapping } from '../types/storage-types'
 import type { ApiKeyRecord, ApiKeyMetadata } from '../types/api-key-types'
 import { eq } from 'drizzle-orm'
 
-/**
- * Drizzle ORM storage adapter for API keys
- * Works with any existing database schema through column mapping
- */
 export class DrizzleStore implements Storage {
-    private db: any // Drizzle database instance
-    private table: any // Drizzle table reference
+    private db: any
+    private table: any
     private columns: Required<DrizzleColumnMapping>
 
     constructor(options: {
@@ -19,7 +15,6 @@ export class DrizzleStore implements Storage {
         this.db = options.db
         this.table = options.table
 
-        // Default column mapping - users can override
         this.columns = {
             id: options.columns?.id ?? 'id',
             keyHash: options.columns?.keyHash ?? 'keyHash',
@@ -33,9 +28,6 @@ export class DrizzleStore implements Storage {
         }
     }
 
-    /**
-     * Convert database row to ApiKeyRecord
-     */
     private rowToRecord(row: any): ApiKeyRecord {
         return {
             id: row[this.columns.id],
@@ -52,9 +44,6 @@ export class DrizzleStore implements Storage {
         }
     }
 
-    /**
-     * Convert ApiKeyRecord to database row
-     */
     private recordToRow(record: ApiKeyRecord): any {
         return {
             [this.columns.id]: record.id,
@@ -75,7 +64,6 @@ export class DrizzleStore implements Storage {
     }
 
     async findByHash(keyHash: string): Promise<ApiKeyRecord | null> {
-
         const rows = await this.db
             .select()
             .from(this.table)
@@ -86,7 +74,6 @@ export class DrizzleStore implements Storage {
     }
 
     async findById(id: string): Promise<ApiKeyRecord | null> {
-
         const rows = await this.db
             .select()
             .from(this.table)
@@ -97,7 +84,6 @@ export class DrizzleStore implements Storage {
     }
 
     async findByOwner(ownerId: string): Promise<ApiKeyRecord[]> {
-
         const rows = await this.db
             .select()
             .from(this.table)
@@ -107,24 +93,13 @@ export class DrizzleStore implements Storage {
     }
 
     async updateMetadata(id: string, metadata: Partial<ApiKeyMetadata>): Promise<void> {
-
         const updates: any = {}
 
-        if (metadata.name !== undefined) {
-            updates[this.columns.name] = metadata.name
-        }
-        if (metadata.description !== undefined) {
-            updates[this.columns.description] = metadata.description
-        }
-        if (metadata.scopes !== undefined) {
-            updates[this.columns.scopes] = JSON.stringify(metadata.scopes)
-        }
-        if (metadata.expiresAt !== undefined) {
-            updates[this.columns.expiresAt] = metadata.expiresAt
-        }
-        if (metadata.lastUsedAt !== undefined) {
-            updates[this.columns.lastUsedAt] = metadata.lastUsedAt
-        }
+        if (metadata.name !== undefined) updates[this.columns.name] = metadata.name
+        if (metadata.description !== undefined) updates[this.columns.description] = metadata.description
+        if (metadata.scopes !== undefined) updates[this.columns.scopes] = JSON.stringify(metadata.scopes)
+        if (metadata.expiresAt !== undefined) updates[this.columns.expiresAt] = metadata.expiresAt
+        if (metadata.lastUsedAt !== undefined) updates[this.columns.lastUsedAt] = metadata.lastUsedAt
 
         await this.db
             .update(this.table)
@@ -133,17 +108,14 @@ export class DrizzleStore implements Storage {
     }
 
     async delete(id: string): Promise<void> {
-
         await this.db
             .delete(this.table)
             .where(eq(this.table[this.columns.id], id))
     }
 
     async deleteByOwner(ownerId: string): Promise<void> {
-
         await this.db
             .delete(this.table)
             .where(eq(this.table[this.columns.ownerId], ownerId))
     }
 }
-

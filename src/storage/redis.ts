@@ -1,116 +1,93 @@
-import Redis from 'ioredis'
 import type { Storage } from '../types/storage-types'
 import type { ApiKeyRecord, ApiKeyMetadata } from '../types/api-key-types'
-
-export interface RedisStoreOptions {
-    /** Redis client instance */
-    client: Redis
-    /** Optional key prefix for all keys (default: 'apikeys:') */
-    keyPrefix?: string
-}
+import type Redis from 'ioredis'
 
 export class RedisStore implements Storage {
-    private client: Redis
-    private keyPrefix: string
+    private redis: Redis
+    private prefix: string
 
-    constructor(options: RedisStoreOptions) {
-        this.client = options.client
-        this.keyPrefix = options.keyPrefix ?? 'apikeys:'
+    constructor(options: { client: Redis; prefix?: string }) {
+        this.redis = options.client
+        this.prefix = options.prefix ?? 'apikey:'
     }
 
-    private getKeyId(id: string): string {
-        return `${this.keyPrefix}id:${id}`
+    private key(id: string): string {
+        return `${this.prefix}${id}`
     }
 
-    private getKeyHash(keyHash: string): string {
-        return `${this.keyPrefix}hash:${keyHash}`
+    private hashKey(hash: string): string {
+        return `${this.prefix}hash:${hash}`
     }
 
-    private getKeyOwner(ownerId: string): string {
-        return `${this.keyPrefix}owner:${ownerId}`
+    private ownerKey(ownerId: string): string {
+        return `${this.prefix}owner:${ownerId}`
     }
 
     async save(record: ApiKeyRecord): Promise<void> {
-        const data = JSON.stringify(record)
-        const keyId = this.getKeyId(record.id)
-        const keyHash = this.getKeyHash(record.keyHash)
-        const keyOwner = this.getKeyOwner(record.metadata.ownerId)
-
-        // Save record data with both ID and hash as keys
-        await this.client.set(keyId, data)
-        await this.client.set(keyHash, record.id) // Map hash to ID for quick lookup
-
-        // Add to owner's set
-        await this.client.sadd(keyOwner, record.id)
+        const pipeline = this.redis.pipeline()
+        pipeline.set(this.key(record.id), JSON.stringify(record))
+        pipeline.set(this.hashKey(record.keyHash), record.id)
+        pipeline.sadd(this.ownerKey(record.metadata.ownerId), record.id)
+        await pipeline.exec()
     }
 
     async findByHash(keyHash: string): Promise<ApiKeyRecord | null> {
-        const keyHashKey = this.getKeyHash(keyHash)
-        const id = await this.client.get(keyHashKey)
-
+        const id = await this.redis.get(this.hashKey(keyHash))
         if (!id) return null
-
         return this.findById(id)
     }
 
     async findById(id: string): Promise<ApiKeyRecord | null> {
-        const keyId = this.getKeyId(id)
-        const data = await this.client.get(keyId)
-
+        const data = await this.redis.get(this.key(id))
         if (!data) return null
-
-        return JSON.parse(data) as ApiKeyRecord
+        return JSON.parse(data)
     }
 
     async findByOwner(ownerId: string): Promise<ApiKeyRecord[]> {
-        const keyOwner = this.getKeyOwner(ownerId)
-        const ids = await this.client.smembers(keyOwner)
-
+        const ids = await this.redis.smembers(this.ownerKey(ownerId))
         if (ids.length === 0) return []
 
-        const records: ApiKeyRecord[] = []
-        for (const id of ids) {
-            const record = await this.findById(id)
-            if (record) {
-                records.push(record)
-            }
-        }
+        const pipeline = this.redis.pipeline()
+        ids.forEach((id) => pipeline.get(this.key(id)))
+        const results = await pipeline.exec()
 
-        return records
+        return results
+            ?.map((result) => result?.[1] ? JSON.parse(result[1] as string) : null)
+            .filter((record): record is ApiKeyRecord => record !== null) ?? []
     }
 
     async updateMetadata(id: string, metadata: Partial<ApiKeyMetadata>): Promise<void> {
         const record = await this.findById(id)
-        if (!record) return
-
-        const updatedRecord: ApiKeyRecord = {
-            ...record,
-            metadata: { ...record.metadata, ...metadata },
+        if (record) {
+            record.metadata = { ...record.metadata, ...metadata }
+            await this.redis.set(this.key(id), JSON.stringify(record))
         }
-
-        const data = JSON.stringify(updatedRecord)
-        const keyId = this.getKeyId(id)
-        await this.client.set(keyId, data)
     }
 
     async delete(id: string): Promise<void> {
         const record = await this.findById(id)
         if (!record) return
 
-        const keyId = this.getKeyId(id)
-        const keyHash = this.getKeyHash(record.keyHash)
-        const keyOwner = this.getKeyOwner(record.metadata.ownerId)
-
-        await this.client.del(keyId)
-        await this.client.del(keyHash)
-        await this.client.srem(keyOwner, id)
+        const pipeline = this.redis.pipeline()
+        pipeline.del(this.key(id))
+        pipeline.del(this.hashKey(record.keyHash))
+        pipeline.srem(this.ownerKey(record.metadata.ownerId), id)
+        await pipeline.exec()
     }
 
     async deleteByOwner(ownerId: string): Promise<void> {
-        const records = await this.findByOwner(ownerId)
-        for (const record of records) {
-            await this.delete(record.id)
+        const ids = await this.redis.smembers(this.ownerKey(ownerId))
+        if (ids.length === 0) return
+
+        const pipeline = this.redis.pipeline()
+        for (const id of ids) {
+            const record = await this.findById(id)
+            if (record) {
+                pipeline.del(this.key(id))
+                pipeline.del(this.hashKey(record.keyHash))
+            }
         }
+        pipeline.del(this.ownerKey(ownerId))
+        await pipeline.exec()
     }
 }
-

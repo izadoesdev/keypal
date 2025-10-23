@@ -7,6 +7,8 @@ import { hashKey } from './core/hash'
 import { validateKey } from './core/validate'
 import { isExpired } from './core/expiration'
 import { hasScope, hasAnyScope, hasAllScopes } from './core/scopes'
+import { extractKeyFromHeaders, hasApiKey, type KeyExtractionOptions } from './core/extract-key'
+import { MemoryCache, type Cache } from './core/cache'
 import { nanoid } from 'nanoid'
 import { MemoryStore } from './storage/memory'
 
@@ -16,11 +18,20 @@ export interface VerifyResult {
     error?: string
 }
 
+export interface VerifyOptions {
+    skipCache?: boolean
+    headerNames?: string[]
+    extractBearer?: boolean
+}
+
 export class ApiKeyManager {
     private config: Config
     private storage: Storage
+    private cache?: Cache
+    private cacheTtl: number
+    private extractionOptions: KeyExtractionOptions
 
-    constructor(config: ConfigInput = {}, storage?: Storage) {
+    constructor(config: ConfigInput = {}) {
         this.config = {
             prefix: config.prefix,
             length: config.length ?? 32,
@@ -28,7 +39,46 @@ export class ApiKeyManager {
             alphabet: config.alphabet,
             salt: config.salt,
         }
-        this.storage = storage ?? new MemoryStore()
+
+        if (config.storage === 'redis') {
+            if (!config.redis) {
+                throw new Error('Redis client required when storage is "redis"')
+            }
+            try {
+                const { RedisStore } = require('./storage/redis')
+                this.storage = new RedisStore({ client: config.redis })
+            } catch (error) {
+                console.error('[better-api-keys] CRITICAL: Failed to initialize Redis storage:', error)
+                throw error
+            }
+        } else if (config.storage && typeof config.storage === 'object') {
+            this.storage = config.storage
+        } else {
+            this.storage = new MemoryStore()
+        }
+
+        this.cacheTtl = config.cacheTtl ?? 60
+        this.extractionOptions = {
+            headerNames: config.headerNames,
+            extractBearer: config.extractBearer,
+        }
+
+        if (config.cache === 'redis') {
+            if (!config.redis) {
+                throw new Error('Redis client required when cache is "redis"')
+            }
+            try {
+                const { RedisCache } = require('./core/cache')
+                this.cache = new RedisCache(config.redis)
+            } catch (error) {
+                console.error('[better-api-keys] CRITICAL: Failed to initialize Redis cache:', error)
+                throw error
+            }
+        } else if (config.cache === true) {
+            this.cache = new MemoryCache()
+        } else if (config.cache && typeof config.cache === 'object') {
+            this.cache = config.cache
+        }
     }
 
     generateKey(): string {
@@ -53,10 +103,42 @@ export class ApiKeyManager {
         })
     }
 
-    async verify(keyOrHeader: string): Promise<VerifyResult> {
-        let key = keyOrHeader
-        if (keyOrHeader.startsWith('Bearer ')) {
-            key = keyOrHeader.slice(7).trim()
+    extractKey(
+        headers: Record<string, string | undefined> | Headers,
+        options?: KeyExtractionOptions
+    ): string | null {
+        const mergedOptions = {
+            headerNames: options?.headerNames ?? this.extractionOptions.headerNames,
+            extractBearer: options?.extractBearer ?? this.extractionOptions.extractBearer,
+        }
+        return extractKeyFromHeaders(headers, mergedOptions)
+    }
+
+    hasKey(
+        headers: Record<string, string | undefined> | Headers,
+        options?: KeyExtractionOptions
+    ): boolean {
+        const mergedOptions = {
+            headerNames: options?.headerNames ?? this.extractionOptions.headerNames,
+            extractBearer: options?.extractBearer ?? this.extractionOptions.extractBearer,
+        }
+        return hasApiKey(headers, mergedOptions)
+    }
+
+    async verify(keyOrHeader: string | Record<string, string | undefined> | Headers, options: VerifyOptions = {}): Promise<VerifyResult> {
+        let key: string | null
+
+        if (typeof keyOrHeader === 'string') {
+            key = keyOrHeader
+            if (keyOrHeader.startsWith('Bearer ')) {
+                key = keyOrHeader.slice(7).trim()
+            }
+        } else {
+            const extractOptions: KeyExtractionOptions = {
+                headerNames: options.headerNames ?? this.extractionOptions.headerNames,
+                extractBearer: options.extractBearer ?? this.extractionOptions.extractBearer,
+            }
+            key = this.extractKey(keyOrHeader, extractOptions)
         }
 
         if (!key) {
@@ -68,6 +150,23 @@ export class ApiKeyManager {
         }
 
         const keyHash = this.hashKey(key)
+
+        if (this.cache && !options.skipCache) {
+            const cached = await this.cache.get(`apikey:${keyHash}`)
+            if (cached) {
+                try {
+                    const record = JSON.parse(cached) as ApiKeyRecord
+                    if (!isExpired(record.metadata.expiresAt)) {
+                        return { valid: true, record }
+                    }
+                    await this.cache.del(`apikey:${keyHash}`)
+                } catch (error) {
+                    console.error('[better-api-keys] CRITICAL: Cache corruption detected, invalidating entry:', error)
+                    await this.cache.del(`apikey:${keyHash}`)
+                }
+            }
+        }
+
         const record = await this.storage.findByHash(keyHash)
 
         if (!record) {
@@ -75,7 +174,18 @@ export class ApiKeyManager {
         }
 
         if (isExpired(record.metadata.expiresAt)) {
+            if (this.cache) {
+                await this.cache.del(`apikey:${keyHash}`)
+            }
             return { valid: false, error: 'API key has expired' }
+        }
+
+        if (this.cache && !options.skipCache) {
+            try {
+                await this.cache.set(`apikey:${keyHash}`, JSON.stringify(record), this.cacheTtl)
+            } catch (error) {
+                console.error('[better-api-keys] CRITICAL: Failed to write to cache:', error)
+            }
         }
 
         return { valid: true, record }
@@ -117,10 +227,28 @@ export class ApiKeyManager {
     }
 
     async revoke(id: string): Promise<void> {
+        const record = await this.findById(id)
+        if (record && this.cache) {
+            try {
+                await this.cache.del(`apikey:${record.keyHash}`)
+            } catch (error) {
+                console.error('[better-api-keys] CRITICAL: Failed to invalidate cache on revoke:', error)
+            }
+        }
         return this.storage.delete(id)
     }
 
     async revokeAll(ownerId: string): Promise<void> {
+        if (this.cache) {
+            const records = await this.list(ownerId)
+            for (const record of records) {
+                try {
+                    await this.cache.del(`apikey:${record.keyHash}`)
+                } catch (error) {
+                    console.error('[better-api-keys] CRITICAL: Failed to invalidate cache on revokeAll:', error)
+                }
+            }
+        }
         return this.storage.deleteByOwner(ownerId)
     }
 
@@ -128,6 +256,17 @@ export class ApiKeyManager {
         await this.storage.updateMetadata(id, {
             lastUsedAt: new Date().toISOString(),
         })
+    }
+
+    async invalidateCache(keyHash: string): Promise<void> {
+        if (this.cache) {
+            try {
+                await this.cache.del(`apikey:${keyHash}`)
+            } catch (error) {
+                console.error('[better-api-keys] CRITICAL: Failed to invalidate cache:', error)
+                throw error
+            }
+        }
     }
 
     isExpired(record: ApiKeyRecord): boolean {
@@ -147,6 +286,6 @@ export class ApiKeyManager {
     }
 }
 
-export function createKeys(config: ConfigInput = {}, storage?: Storage): ApiKeyManager {
-    return new ApiKeyManager(config, storage)
+export function createKeys(config: ConfigInput = {}): ApiKeyManager {
+    return new ApiKeyManager(config)
 }

@@ -1,4 +1,6 @@
 import { Type, type Static } from 'typebox'
+import type { Cache } from '../core/cache'
+import type { Storage } from './storage-types'
 
 export const ConfigSchema = Type.Object({
     prefix: Type.Optional(Type.String()),
@@ -19,4 +21,10 @@ export interface ConfigInput {
     algorithm?: 'sha256' | 'sha512'
     alphabet?: string
     salt?: string
+    storage?: Storage | 'memory' | 'redis'
+    cache?: Cache | boolean | 'redis'
+    cacheTtl?: number
+    headerNames?: string[]
+    extractBearer?: boolean
+    redis?: any
 }

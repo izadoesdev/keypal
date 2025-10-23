@@ -1,6 +1,7 @@
-import { describe, it, expect, beforeEach } from 'vitest'
+import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { createKeys } from './manager'
 import { MemoryStore } from './storage/memory'
+import { MemoryCache } from './core/cache'
 
 describe('ApiKeyManager', () => {
     let keys: ReturnType<typeof createKeys>
@@ -12,7 +13,8 @@ describe('ApiKeyManager', () => {
             prefix: 'sk_test_',
             length: 32,
             algorithm: 'sha256',
-        }, storage)
+            storage,
+        })
     })
 
     describe('key generation', () => {
@@ -81,8 +83,7 @@ describe('ApiKeyManager', () => {
         })
 
         it('should validate with sha512 algorithm', () => {
-            const manager512 = createKeys({ algorithm: 'sha512' }, storage)
-
+            const manager512 = createKeys({ algorithm: 'sha512', storage })
             const key = 'test-key-123'
             const hash = manager512.hashKey(key)
 
@@ -247,6 +248,380 @@ describe('ApiKeyManager', () => {
 
             expect(result1.valid).toBe(true)
             expect(result2.valid).toBe(true)
+        })
+    })
+})
+
+describe('ApiKeyManager - Key Extraction', () => {
+    let keys: ReturnType<typeof createKeys>
+
+    beforeEach(() => {
+        keys = createKeys({ prefix: 'sk_' })
+    })
+
+    it('should extract key from Headers object', async () => {
+        const { key } = await keys.create({ ownerId: 'user_1' })
+
+        const headers = new Headers({
+            'authorization': `Bearer ${key}`,
+        })
+
+        const result = await keys.verify(headers)
+        expect(result.valid).toBe(true)
+    })
+
+    it('should extract key from x-api-key header', async () => {
+        const { key } = await keys.create({ ownerId: 'user_1' })
+
+        const headers = new Headers({
+            'x-api-key': key,
+        })
+
+        const result = await keys.verify(headers)
+        expect(result.valid).toBe(true)
+    })
+
+    it('should extract key from plain object', async () => {
+        const { key } = await keys.create({ ownerId: 'user_1' })
+
+        const headers = {
+            'authorization': `Bearer ${key}`,
+        }
+
+        const result = await keys.verify(headers)
+        expect(result.valid).toBe(true)
+    })
+
+    it('should support custom header names per request', async () => {
+        const { key } = await keys.create({ ownerId: 'user_1' })
+
+        const headers = new Headers({
+            'x-custom-auth': key,
+        })
+
+        const result = await keys.verify(headers, {
+            headerNames: ['x-custom-auth'],
+        })
+
+        expect(result.valid).toBe(true)
+    })
+
+    it('should provide extractKey helper', () => {
+        const headers = new Headers({
+            'x-api-key': 'sk_test_123',
+        })
+
+        const key = keys.extractKey(headers)
+        expect(key).toBe('sk_test_123')
+    })
+
+    it('should provide hasKey helper', () => {
+        const headers1 = new Headers({
+            'x-api-key': 'sk_test_123',
+        })
+
+        const headers2 = new Headers({
+            'content-type': 'application/json',
+        })
+
+        expect(keys.hasKey(headers1)).toBe(true)
+        expect(keys.hasKey(headers2)).toBe(false)
+    })
+})
+
+describe('ApiKeyManager - Config-based Header Extraction', () => {
+    it('should use default header names from config', async () => {
+        const keys = createKeys({ prefix: 'sk_' })
+        const { key } = await keys.create({ ownerId: 'user_1' })
+
+        const headers = new Headers({
+            'authorization': `Bearer ${key}`,
+        })
+
+        const result = await keys.verify(headers)
+        expect(result.valid).toBe(true)
+    })
+
+    it('should use custom header names from config', async () => {
+        const keys = createKeys({
+            prefix: 'sk_',
+            headerNames: ['x-custom-auth', 'x-api-token'],
+        })
+        const { key } = await keys.create({ ownerId: 'user_1' })
+
+        const headers = new Headers({
+            'x-custom-auth': key,
+        })
+
+        const result = await keys.verify(headers)
+        expect(result.valid).toBe(true)
+    })
+
+    it('should respect extractBearer config option', async () => {
+        const keys = createKeys({
+            prefix: 'sk_',
+            extractBearer: false,
+        })
+        const { key } = await keys.create({ ownerId: 'user_1' })
+
+        const headers = new Headers({
+            'authorization': key,
+        })
+
+        const result = await keys.verify(headers)
+        expect(result.valid).toBe(true)
+    })
+
+    it('should allow overriding header names per request', async () => {
+        const keys = createKeys({
+            prefix: 'sk_',
+            headerNames: ['authorization'],
+        })
+        const { key } = await keys.create({ ownerId: 'user_1' })
+
+        const headers = new Headers({
+            'x-special-key': key,
+        })
+
+        const result = await keys.verify(headers, {
+            headerNames: ['x-special-key'],
+        })
+
+        expect(result.valid).toBe(true)
+    })
+
+    it('should use config headers with hasKey helper', async () => {
+        const keys = createKeys({
+            prefix: 'sk_',
+            headerNames: ['x-api-key'],
+        })
+
+        const headers1 = new Headers({
+            'x-api-key': 'sk_test_123',
+        })
+
+        const headers2 = new Headers({
+            'authorization': 'Bearer sk_test_123',
+        })
+
+        expect(keys.hasKey(headers1)).toBe(true)
+        expect(keys.hasKey(headers2)).toBe(false)
+    })
+
+    it('should use config headers with extractKey helper', async () => {
+        const keys = createKeys({
+            prefix: 'sk_',
+            headerNames: ['x-custom-token'],
+        })
+
+        const headers = new Headers({
+            'x-custom-token': 'sk_test_123',
+        })
+
+        const extracted = keys.extractKey(headers)
+        expect(extracted).toBe('sk_test_123')
+    })
+
+    it('should work with multiple configured header names', async () => {
+        const keys = createKeys({
+            prefix: 'sk_',
+            headerNames: ['x-api-key', 'x-api-token', 'authorization'],
+        })
+        const { key } = await keys.create({ ownerId: 'user_1' })
+
+        const headers1 = new Headers({ 'x-api-key': key })
+        const headers2 = new Headers({ 'x-api-token': key })
+        const headers3 = new Headers({ 'authorization': `Bearer ${key}` })
+
+        const result1 = await keys.verify(headers1)
+        const result2 = await keys.verify(headers2)
+        const result3 = await keys.verify(headers3)
+
+        expect(result1.valid).toBe(true)
+        expect(result2.valid).toBe(true)
+        expect(result3.valid).toBe(true)
+    })
+
+    it('should prefer first configured header when multiple present', async () => {
+        const keys = createKeys({
+            prefix: 'sk_',
+            headerNames: ['x-primary-key', 'x-secondary-key'],
+        })
+        const { key: key1 } = await keys.create({ ownerId: 'user_1' })
+        const { key: key2 } = await keys.create({ ownerId: 'user_2' })
+
+        const headers = new Headers({
+            'x-primary-key': key1,
+            'x-secondary-key': key2,
+        })
+
+        const result = await keys.verify(headers)
+        expect(result.valid).toBe(true)
+        expect(result.record?.metadata.ownerId).toBe('user_1')
+    })
+})
+
+describe('ApiKeyManager - Caching', () => {
+    describe('without cache', () => {
+        it('should work normally without caching', async () => {
+            const keys = createKeys({ prefix: 'sk_' })
+            const { key } = await keys.create({ ownerId: 'user_1' })
+
+            const result1 = await keys.verify(key)
+            const result2 = await keys.verify(key)
+
+            expect(result1.valid).toBe(true)
+            expect(result2.valid).toBe(true)
+        })
+    })
+
+    describe('with in-memory cache (cache: true)', () => {
+        it('should enable memory cache by default', async () => {
+            const keys = createKeys({ prefix: 'sk_', cache: true })
+            const { key } = await keys.create({ ownerId: 'user_1' })
+
+            const result1 = await keys.verify(key)
+            const result2 = await keys.verify(key)
+
+            expect(result1.valid).toBe(true)
+            expect(result2.valid).toBe(true)
+        })
+
+        it('should cache valid keys', async () => {
+            const storage = new MemoryStore()
+            const keys = createKeys({
+                prefix: 'sk_',
+                cache: true,
+                storage,
+            })
+
+            const { key } = await keys.create({ ownerId: 'user_1' })
+
+            const spyFindByHash = vi.spyOn(storage, 'findByHash')
+
+            await keys.verify(key)
+            await keys.verify(key)
+            await keys.verify(key)
+
+            expect(spyFindByHash).toHaveBeenCalledTimes(1)
+        })
+
+        it('should not cache invalid keys', async () => {
+            const keys = createKeys({ prefix: 'sk_', cache: true })
+
+            const result1 = await keys.verify('sk_invalid_123')
+            const result2 = await keys.verify('sk_invalid_123')
+
+            expect(result1.valid).toBe(false)
+            expect(result2.valid).toBe(false)
+        })
+
+        it('should invalidate cache on revoke', async () => {
+            const storage = new MemoryStore()
+            const keys = createKeys({
+                prefix: 'sk_',
+                cache: true,
+                storage,
+            })
+
+            const { key, record } = await keys.create({ ownerId: 'user_1' })
+
+            const result1 = await keys.verify(key)
+            expect(result1.valid).toBe(true)
+
+            await keys.revoke(record.id)
+
+            const result2 = await keys.verify(key)
+            expect(result2.valid).toBe(false)
+        })
+
+        it('should skip cache when skipCache option is true', async () => {
+            const storage = new MemoryStore()
+            const keys = createKeys({
+                prefix: 'sk_',
+                cache: true,
+                storage,
+            })
+
+            const { key } = await keys.create({ ownerId: 'user_1' })
+
+            const spyFindByHash = vi.spyOn(storage, 'findByHash')
+
+            await keys.verify(key)
+            await keys.verify(key, { skipCache: true })
+
+            expect(spyFindByHash).toHaveBeenCalledTimes(2)
+        })
+
+        it('should not cache expired keys', async () => {
+            const keys = createKeys({ prefix: 'sk_', cache: true })
+
+            const pastDate = new Date()
+            pastDate.setFullYear(pastDate.getFullYear() - 1)
+
+            const { key } = await keys.create({
+                ownerId: 'user_1',
+                expiresAt: pastDate.toISOString(),
+            })
+
+            const result1 = await keys.verify(key)
+            const result2 = await keys.verify(key)
+
+            expect(result1.valid).toBe(false)
+            expect(result2.valid).toBe(false)
+        })
+
+        it('should invalidate cache for all user keys on revokeAll', async () => {
+            const storage = new MemoryStore()
+            const keys = createKeys({
+                prefix: 'sk_',
+                cache: true,
+                storage,
+            })
+
+            const { key: key1 } = await keys.create({ ownerId: 'user_1' })
+            const { key: key2 } = await keys.create({ ownerId: 'user_1' })
+
+            await keys.verify(key1)
+            await keys.verify(key2)
+
+            await keys.revokeAll('user_1')
+
+            const result1 = await keys.verify(key1)
+            const result2 = await keys.verify(key2)
+
+            expect(result1.valid).toBe(false)
+            expect(result2.valid).toBe(false)
+        })
+    })
+
+    describe('with custom cache', () => {
+        it('should use custom cache implementation', async () => {
+            const customCache = new MemoryCache()
+            const keys = createKeys({
+                prefix: 'sk_',
+                cache: customCache,
+            })
+
+            const { key } = await keys.create({ ownerId: 'user_1' })
+
+            const result = await keys.verify(key)
+            expect(result.valid).toBe(true)
+
+            const cacheKey = `apikey:${keys.hashKey(key)}`
+            const cached = customCache.get(cacheKey)
+            expect(cached).toBeTruthy()
+        })
+
+        it('should allow manual cache invalidation', async () => {
+            const keys = createKeys({ prefix: 'sk_', cache: true })
+            const { key, record } = await keys.create({ ownerId: 'user_1' })
+
+            await keys.verify(key)
+            await keys.invalidateCache(record.keyHash)
+
+            const result = await keys.verify(key)
+            expect(result.valid).toBe(true)
         })
     })
 })

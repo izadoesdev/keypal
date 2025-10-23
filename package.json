@@ -33,6 +33,7 @@
     "test:run": "vitest run",
     "test:redis": "vitest run src/storage/redis.test.ts",
     "test:drizzle": "vitest run src/storage/drizzle.test.ts",
+    "bench": "bun run benchmark.ts",
     "example:hono": "bun run examples/hono-api.ts",
     "redis:up": "docker-compose up -d",
     "redis:down": "docker-compose down",

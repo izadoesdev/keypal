@@ -1,5 +1,6 @@
 {
-  "name": "better-api-keys",
+  "name": "better-api-key",
+  "version": "0.0.10",
   "type": "module",
   "main": "./dist/index.cjs",
   "module": "./dist/index.mjs",
@@ -24,6 +25,11 @@
       "types": "./dist/storage/drizzle.d.ts",
       "require": "./dist/storage/drizzle.cjs",
       "import": "./dist/storage/drizzle.mjs"
+    },
+    "./drizzle": {
+      "types": "./dist/drizzle/index.d.ts",
+      "require": "./dist/drizzle/index.cjs",
+      "import": "./dist/drizzle/index.mjs"
     }
   },
   "scripts": {

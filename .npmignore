@@ -1,0 +1,36 @@
+# Source files - only dist should be published
+src/
+examples/
+.github/
+docs/
+
+# Development files
+*.test.ts
+*.test.tsx
+*.spec.ts
+vitest.config.ts
+tsconfig.json
+build.config.ts
+benchmark.ts
+FEATURE_SUGGESTIONS.md
+PRD.md
+docker-compose.yml
+
+# Lock files
+bun.lock
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+
+# IDE files
+.cursor/
+.vscode/
+.idea/
+
+# Build artifacts (keep dist/)
+dist/shared/
+
+# Misc
+.DS_Store
+*.log
+

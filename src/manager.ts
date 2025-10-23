@@ -47,7 +47,7 @@ export class ApiKeyManager {
 
         this.revokedKeyTtl = config.revokedKeyTtl ?? 604800 // 7 days default
         this.isRedisStorage = config.storage === 'redis'
-        this.autoTrackUsage = config.autoTrackUsage ?? false
+        this.autoTrackUsage = config.autoTrackUsage ?? true
 
         if (config.storage === 'redis') {
             if (!config.redis) {
@@ -68,8 +68,8 @@ export class ApiKeyManager {
 
         this.cacheTtl = config.cacheTtl ?? 60
         this.extractionOptions = {
-            headerNames: config.headerNames,
-            extractBearer: config.extractBearer,
+            headerNames: config.headerNames ?? ['x-api-key'],
+            extractBearer: config.extractBearer ?? true,
         }
 
         if (config.cache === 'redis') {
@@ -88,6 +88,7 @@ export class ApiKeyManager {
         } else if (config.cache && typeof config.cache === 'object') {
             this.cache = config.cache
         }
+        // else: cache is false/undefined by default, no caching
     }
 
     generateKey(): string {

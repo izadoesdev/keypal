@@ -29,6 +29,6 @@ export interface ConfigInput {
     redis?: any
     /** TTL in seconds for revoked keys in Redis (default: 604800 = 7 days). Set to 0 to keep forever. */
     revokedKeyTtl?: number
-    /** Automatically update lastUsedAt when verifying a key (default: false) */
+    /** Automatically update lastUsedAt when verifying a key (default: true) */
     autoTrackUsage?: boolean
 }

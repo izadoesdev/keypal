@@ -36,14 +36,9 @@ const pool = new Pool({
 const db = drizzle(pool)
 
 const keys = createKeys({
-    prefix: 'dtbd_',
-    length: 32,
+    prefix: 'dt_bd_sk_',
     storage: new DrizzleStore({ db, table: apikey }),
     cache: true,
-    cacheTtl: 60,
-    headerNames: ['x-api-key'],
-    extractBearer: true,
-    autoTrackUsage: true,
 })
 
 export async function getKey(headers: Headers): Promise<ApiKeyRecord | null> {

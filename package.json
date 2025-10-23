@@ -1,0 +1,63 @@
+{
+  "name": "better-api-keys",
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "require": "./dist/index.cjs",
+      "import": "./dist/index.mjs"
+    },
+    "./storage/memory": {
+      "types": "./dist/storage/memory.d.ts",
+      "require": "./dist/storage/memory.cjs",
+      "import": "./dist/storage/memory.mjs"
+    },
+    "./storage/redis": {
+      "types": "./dist/storage/redis.d.ts",
+      "require": "./dist/storage/redis.cjs",
+      "import": "./dist/storage/redis.mjs"
+    },
+    "./storage/drizzle": {
+      "types": "./dist/storage/drizzle.d.ts",
+      "require": "./dist/storage/drizzle.cjs",
+      "import": "./dist/storage/drizzle.mjs"
+    }
+  },
+  "scripts": {
+    "build": "unbuild",
+    "test": "vitest",
+    "test:ui": "vitest --ui",
+    "test:run": "vitest run",
+    "test:redis": "vitest run src/storage/redis.test.ts",
+    "test:drizzle": "vitest run src/storage/drizzle.test.ts",
+    "example:hono": "bun run examples/hono-api.ts",
+    "redis:up": "docker-compose up -d",
+    "redis:down": "docker-compose down",
+    "redis:logs": "docker-compose logs -f redis",
+    "prepublishOnly": "bun run build"
+  },
+  "devDependencies": {
+    "@hono/node-server": "^1.19.5",
+    "@types/bun": "latest",
+    "@vitest/ui": "^4.0.1",
+    "better-sqlite3": "^12.4.1",
+    "hono": "^4.10.2",
+    "unbuild": "^3.6.1",
+    "undici": "^7.16.0",
+    "vitest": "^4.0.1"
+  },
+  "peerDependencies": {
+    "typescript": "^5"
+  },
+  "optionalDependencies": {
+    "ioredis": "^5.8.2",
+    "drizzle-orm": "^0.44.6"
+  },
+  "dependencies": {
+    "nanoid": "^5.1.6",
+    "typebox": "^1.0.43"
+  }
+}

@@ -1,5 +1,8 @@
 # better-api-keys
 
+[![CI](https://github.com/izadoesdev/better-api-keys/actions/workflows/ci.yml/badge.svg)](https://github.com/YOUR_USERNAME/better-api-keys/actions/workflows/ci.yml)
+[![npm version](https://badge.fury.io/js/better-api-keys.svg)](https://badge.fury.io/js/better-api-keys)
+
 A TypeScript library for secure API key management with cryptographic hashing, expiration, scopes, and pluggable storage.
 
 ## Features

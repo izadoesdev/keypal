@@ -47,6 +47,7 @@
     "better-sqlite3": "^12.4.1",
     "hono": "^4.10.2",
     "mitata": "^1.0.34",
+    "pg": "^8.16.3",
     "unbuild": "^3.6.1",
     "undici": "^7.16.0",
     "vitest": "^4.0.1"
@@ -59,6 +60,7 @@
     "drizzle-orm": "^0.44.6"
   },
   "dependencies": {
+    "@types/pg": "^8.15.5",
     "nanoid": "^5.1.6",
     "typebox": "^1.0.43"
   }

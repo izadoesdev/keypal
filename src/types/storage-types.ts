@@ -71,6 +71,9 @@ export interface DrizzleColumnMapping {
     /** Column name for scopes (default: 'scopes') */
     scopes?: string
 
+    /** Column name for resources (default: 'resources') */
+    resources?: string
+
     /** Column name for expiration date (default: 'expiresAt') */
     expiresAt?: string
 

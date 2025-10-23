@@ -16,6 +16,9 @@ export const ApiKeyMetadataSchema = Type.Object({
     /** Scopes/permissions associated with this key */
     scopes: Type.Optional(Type.Array(Type.String())),
 
+    /** Resource-specific scopes (e.g., { "website:123": ["read"], "project:456": ["write"] }) */
+    resources: Type.Optional(Type.Record(Type.String(), Type.Array(Type.String()))),
+
     /** ISO timestamp when the key expires (null if never expires) */
     expiresAt: Type.Optional(Type.Union([Type.String(), Type.Null()])),
 

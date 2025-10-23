@@ -22,6 +22,7 @@ export class DrizzleStore implements Storage {
             name: options.columns?.name ?? 'name',
             description: options.columns?.description ?? 'description',
             scopes: options.columns?.scopes ?? 'scopes',
+            resources: options.columns?.resources ?? 'resources',
             expiresAt: options.columns?.expiresAt ?? 'expiresAt',
             createdAt: options.columns?.createdAt ?? 'createdAt',
             lastUsedAt: options.columns?.lastUsedAt ?? 'lastUsedAt',
@@ -40,6 +41,7 @@ export class DrizzleStore implements Storage {
                 name: row[this.columns.name] ?? undefined,
                 description: row[this.columns.description] ?? undefined,
                 scopes: row[this.columns.scopes] ? JSON.parse(row[this.columns.scopes]) : undefined,
+                resources: row[this.columns.resources] ? JSON.parse(row[this.columns.resources]) : undefined,
                 expiresAt: row[this.columns.expiresAt] ?? null,
                 createdAt: row[this.columns.createdAt] ?? undefined,
                 lastUsedAt: row[this.columns.lastUsedAt] ?? undefined,
@@ -58,6 +60,7 @@ export class DrizzleStore implements Storage {
             [this.columns.name]: record.metadata.name ?? null,
             [this.columns.description]: record.metadata.description ?? null,
             [this.columns.scopes]: record.metadata.scopes ? JSON.stringify(record.metadata.scopes) : null,
+            [this.columns.resources]: record.metadata.resources ? JSON.stringify(record.metadata.resources) : null,
             [this.columns.expiresAt]: record.metadata.expiresAt ?? null,
             [this.columns.createdAt]: record.metadata.createdAt ?? null,
             [this.columns.lastUsedAt]: record.metadata.lastUsedAt ?? null,
@@ -107,6 +110,7 @@ export class DrizzleStore implements Storage {
         if (metadata.name !== undefined) updates[this.columns.name] = metadata.name
         if (metadata.description !== undefined) updates[this.columns.description] = metadata.description
         if (metadata.scopes !== undefined) updates[this.columns.scopes] = JSON.stringify(metadata.scopes)
+        if (metadata.resources !== undefined) updates[this.columns.resources] = JSON.stringify(metadata.resources)
         if (metadata.expiresAt !== undefined) updates[this.columns.expiresAt] = metadata.expiresAt
         if (metadata.lastUsedAt !== undefined) updates[this.columns.lastUsedAt] = metadata.lastUsedAt
         if (metadata.enabled !== undefined) updates[this.columns.enabled] = metadata.enabled

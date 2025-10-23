@@ -6,7 +6,7 @@ import { generateKey } from './core/generate'
 import { hashKey } from './core/hash'
 import { validateKey } from './core/validate'
 import { isExpired } from './core/expiration'
-import { hasScope, hasAnyScope, hasAllScopes } from './core/scopes'
+import { hasScope, hasAnyScope, hasAllScopes, hasScopeWithResources, hasAnyScopeWithResources, hasAllScopesWithResources, type ScopeCheckOptions } from './core/scopes'
 import { extractKeyFromHeaders, hasApiKey, type KeyExtractionOptions } from './core/extract-key'
 import { MemoryCache, type Cache } from './core/cache'
 import { nanoid } from 'nanoid'
@@ -251,6 +251,7 @@ export class ApiKeyManager {
                 name: metadata.name,
                 description: metadata.description,
                 scopes: metadata.scopes,
+                resources: metadata.resources,
                 expiresAt: metadata.expiresAt ?? null,
                 createdAt: now,
                 lastUsedAt: undefined,
@@ -359,6 +360,7 @@ export class ApiKeyManager {
             name: metadata?.name ?? oldRecord.metadata.name,
             description: metadata?.description ?? oldRecord.metadata.description,
             scopes: metadata?.scopes ?? oldRecord.metadata.scopes,
+            resources: metadata?.resources ?? oldRecord.metadata.resources,
             expiresAt: metadata?.expiresAt ?? oldRecord.metadata.expiresAt,
         })
 
@@ -410,16 +412,53 @@ export class ApiKeyManager {
         return isExpired(record.metadata.expiresAt)
     }
 
-    hasScope(record: ApiKeyRecord, scope: PermissionScope): boolean {
-        return hasScope(record.metadata.scopes, scope)
+    hasScope(record: ApiKeyRecord, scope: PermissionScope, options?: ScopeCheckOptions): boolean {
+        return hasScopeWithResources(record.metadata.scopes, record.metadata.resources, scope, options)
     }
 
-    hasAnyScope(record: ApiKeyRecord, requiredScopes: PermissionScope[]): boolean {
-        return hasAnyScope(record.metadata.scopes, requiredScopes)
+    hasAnyScope(record: ApiKeyRecord, requiredScopes: PermissionScope[], options?: ScopeCheckOptions): boolean {
+        return hasAnyScopeWithResources(record.metadata.scopes, record.metadata.resources, requiredScopes, options)
     }
 
-    hasAllScopes(record: ApiKeyRecord, requiredScopes: PermissionScope[]): boolean {
-        return hasAllScopes(record.metadata.scopes, requiredScopes)
+    hasAllScopes(record: ApiKeyRecord, requiredScopes: PermissionScope[], options?: ScopeCheckOptions): boolean {
+        return hasAllScopesWithResources(record.metadata.scopes, record.metadata.resources, requiredScopes, options)
+    }
+
+    /**
+     * Verify API key from headers and return the record or null
+     * This is a convenience method that combines verify() with automatic null handling
+     */
+    async verifyFromHeaders(headers: Record<string, string | undefined> | Headers, options?: VerifyOptions): Promise<ApiKeyRecord | null> {
+        const result = await this.verify(headers, options)
+        return result.valid ? result.record ?? null : null
+    }
+
+    /**
+     * Check if an API key has a specific scope for a resource
+     * @param record - The API key record
+     * @param resourceType - Type of resource (e.g., 'website', 'project', 'team')
+     * @param resourceId - ID of the resource
+     * @param scope - Required scope to check
+     */
+    checkResourceScope(record: ApiKeyRecord | null, resourceType: string, resourceId: string, scope: PermissionScope): boolean {
+        if (!record) return false
+        return this.hasScope(record, scope, { resource: `${resourceType}:${resourceId}` })
+    }
+
+    /**
+     * Check if an API key has any of the required scopes for a resource
+     */
+    checkResourceAnyScope(record: ApiKeyRecord | null, resourceType: string, resourceId: string, scopes: PermissionScope[]): boolean {
+        if (!record) return false
+        return this.hasAnyScope(record, scopes, { resource: `${resourceType}:${resourceId}` })
+    }
+
+    /**
+     * Check if an API key has all required scopes for a resource
+     */
+    checkResourceAllScopes(record: ApiKeyRecord | null, resourceType: string, resourceId: string, scopes: PermissionScope[]): boolean {
+        if (!record) return false
+        return this.hasAllScopes(record, scopes, { resource: `${resourceType}:${resourceId}` })
     }
 }
 

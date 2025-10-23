@@ -2,7 +2,7 @@
 
 [![Test](https://github.com/izadoesdev/better-api-keys/actions/workflows/test.yml/badge.svg)](https://github.com/izadoesdev/better-api-keys/actions/workflows/test.yml)
 [![Benchmark](https://github.com/izadoesdev/better-api-keys/actions/workflows/benchmark.yml/badge.svg)](https://github.com/izadoesdev/better-api-keys/actions/workflows/benchmark.yml)
-[![npm version](https://badge.fury.io/js/better-api-keys.svg)](https://badge.fury.io/js/better-api-keys)
+[![npm version](https://badge.fury.io/js/better-api-key.svg)](https://badge.fury.io/js/better-api-key)
 
 A TypeScript library for secure API key management with cryptographic hashing, expiration, scopes, and pluggable storage.
 

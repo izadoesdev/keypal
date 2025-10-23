@@ -9,6 +9,7 @@ export const apikey = pgTable(
         name: text('name'),
         description: text('description'),
         scopes: jsonb('scopes').default([]),
+        resources: jsonb('resources').default({}),
         enabled: boolean('enabled').notNull().default(true),
         revokedAt: timestamp('revoked_at', { mode: 'string' }),
         rotatedTo: text('rotated_to'),

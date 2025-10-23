@@ -162,8 +162,9 @@ export class ApiKeyManager {
                 try {
                     const record = JSON.parse(cached) as ApiKeyRecord
 
-                    if (record.metadata.enabled === false) {
-                        return { valid: false, error: 'API key is disabled' }
+                    if (isExpired(record.metadata.expiresAt)) {
+                        await this.cache.del(`apikey:${keyHash}`)
+                        return { valid: false, error: 'API key has expired' }
                     }
 
                     if (record.metadata.revokedAt) {
@@ -171,10 +172,11 @@ export class ApiKeyManager {
                         return { valid: false, error: 'API key has been revoked' }
                     }
 
-                    if (!isExpired(record.metadata.expiresAt)) {
-                        return { valid: true, record }
+                    if (record.metadata.enabled === false) {
+                        return { valid: false, error: 'API key is disabled' }
                     }
-                    await this.cache.del(`apikey:${keyHash}`)
+
+                    return { valid: true, record }
                 } catch (error) {
                     console.error('[better-api-keys] CRITICAL: Cache corruption detected, invalidating entry:', error)
                     await this.cache.del(`apikey:${keyHash}`)
@@ -188,8 +190,12 @@ export class ApiKeyManager {
             return { valid: false, error: 'Invalid API key' }
         }
 
-        if (record.metadata.enabled === false) {
-            return { valid: false, error: 'API key is disabled' }
+        // Check expiration first
+        if (isExpired(record.metadata.expiresAt)) {
+            if (this.cache) {
+                await this.cache.del(`apikey:${keyHash}`)
+            }
+            return { valid: false, error: 'API key has expired' }
         }
 
         if (record.metadata.revokedAt) {
@@ -199,11 +205,8 @@ export class ApiKeyManager {
             return { valid: false, error: 'API key has been revoked' }
         }
 
-        if (isExpired(record.metadata.expiresAt)) {
-            if (this.cache) {
-                await this.cache.del(`apikey:${keyHash}`)
-            }
-            return { valid: false, error: 'API key has expired' }
+        if (record.metadata.enabled === false) {
+            return { valid: false, error: 'API key is disabled' }
         }
 
         if (this.cache && !options.skipCache) {
@@ -286,9 +289,7 @@ export class ApiKeyManager {
     async revokeAll(ownerId: string): Promise<void> {
         const records = await this.list(ownerId)
 
-        for (const record of records) {
-            await this.revoke(record.id)
-        }
+        await Promise.all(records.map(record => this.revoke(record.id)))
     }
 
     async enable(id: string): Promise<void> {

@@ -45,6 +45,7 @@
     "@vitest/ui": "^4.0.1",
     "better-sqlite3": "^12.4.1",
     "hono": "^4.10.2",
+    "mitata": "^1.0.34",
     "unbuild": "^3.6.1",
     "undici": "^7.16.0",
     "vitest": "^4.0.1"

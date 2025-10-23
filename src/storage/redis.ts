@@ -61,6 +61,10 @@ export class RedisStore implements Storage {
         if (record) {
             record.metadata = { ...record.metadata, ...metadata }
             await this.redis.set(this.key(id), JSON.stringify(record))
+
+            if (metadata.revokedAt) {
+                await this.redis.del(this.hashKey(record.keyHash))
+            }
         }
     }
 

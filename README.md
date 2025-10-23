@@ -9,6 +9,7 @@ A TypeScript library for secure API key management with cryptographic hashing, e
 - **Built-in Caching**: Optional in-memory or Redis caching for validated keys
 - **Flexible Storage**: Memory, Redis, and Drizzle ORM adapters included
 - **Scope-based Permissions**: Fine-grained access control
+- **Key Management**: Enable/disable, rotate, and soft-revoke keys with audit trails
 - **TypeScript**: Full type safety
 - **Zero Config**: Works out of the box with sensible defaults
 
@@ -69,6 +70,9 @@ const keys = createKeys({
   // cache: 'redis', // Redis cache
   cacheTtl: 60,
   
+  // Revocation
+  revokedKeyTtl: 604800, // TTL for revoked keys in Redis (7 days), set to 0 to keep forever
+  
   // Header detection
   headerNames: ['x-api-key', 'authorization'],
   extractBearer: true,
@@ -86,12 +90,23 @@ const { key, record } = await keys.create({
   name: 'Production Key',
   scopes: ['read', 'write'],
   expiresAt: '2025-12-31',
+  enabled: true, // optional, defaults to true
 })
 
 // List
 const userKeys = await keys.list('user_123')
 
-// Revoke
+// Enable/Disable
+await keys.enable(record.id)
+await keys.disable(record.id)
+
+// Rotate (create new key, mark old as revoked)
+const { key: newKey, record: newRecord, oldRecord } = await keys.rotate(record.id, {
+  name: 'Updated Key',
+  scopes: ['read', 'write', 'admin'],
+})
+
+// Revoke (soft delete - keeps record with revokedAt timestamp)
 await keys.revoke(record.id)
 await keys.revokeAll('user_123')
 
@@ -119,7 +134,7 @@ const result = await keys.verify(headers, {
 if (result.valid) {
   console.log(result.record)
 } else {
-  console.log(result.error)
+  console.log(result.error) // 'Missing API key' | 'Invalid API key' | 'API key has expired' | 'API key is disabled' | 'API key has been revoked'
 }
 ```
 
@@ -267,6 +282,14 @@ app.get('/api/data', async (c) => {
 6. **Monitor usage**: Track `lastUsedAt` to identify unused keys
 
 7. **Rotate keys**: Implement regular key rotation policies
+   ```typescript
+   // Rotate keys periodically
+   const { key: newKey } = await keys.rotate(oldRecord.id)
+   ```
+
+8. **Use soft revocation**: Revoked keys are kept with `revokedAt` timestamp for audit trails (Redis TTL: 7 days, Drizzle: forever)
+
+9. **Enable/Disable rather than revoke**: Temporarily disable keys instead of revoking them
 
 ## TypeScript Types
 
@@ -285,6 +308,9 @@ interface ApiKeyMetadata {
   expiresAt: string | null
   createdAt?: string
   lastUsedAt?: string
+  enabled?: boolean
+  revokedAt?: string | null
+  rotatedTo?: string | null
 }
 
 interface VerifyResult {

@@ -590,7 +590,7 @@ describe('HTTP API Integration', () => {
             expect(response.status).toBe(200)
             expect(Array.isArray(data)).toBe(true)
             expect(data.length).toBe(2)
-            expect(data[0].isExpired).toBe(false)
+            expect(data[0]?.isExpired).toBe(false)
         })
 
         it('should prevent unauthorized access to other users keys', async () => {

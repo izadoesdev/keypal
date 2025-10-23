@@ -38,20 +38,17 @@ export function extractKeyFromHeaders(
 
         const lowerValue = trimmed.toLowerCase()
 
-        if (lowerValue.startsWith('bearer')) {
+        if (lowerValue.startsWith('bearer ')) {
             if (extractBearer) {
-                if (lowerValue.length === 6) {
-                    continue
-                }
-                if (lowerValue[6] === ' ') {
-                    const key = trimmed.slice(7).trim()
-                    if (!key) continue
-                    return key
-                }
-                continue
+                const key = trimmed.slice(7).trim()
+                if (!key) continue
+                return key
             } else {
                 return trimmed
             }
+        } else if (lowerValue === 'bearer') {
+            // Handle "Bearer" without token - return null to indicate missing key
+            continue
         } else {
             return trimmed
         }

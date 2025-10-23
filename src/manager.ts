@@ -68,7 +68,7 @@ export class ApiKeyManager {
 
         this.cacheTtl = config.cacheTtl ?? 60
         this.extractionOptions = {
-            headerNames: config.headerNames ?? ['x-api-key'],
+            headerNames: config.headerNames ?? ['authorization', 'x-api-key'],
             extractBearer: config.extractBearer ?? true,
         }
 

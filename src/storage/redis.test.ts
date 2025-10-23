@@ -247,6 +247,28 @@ describe('RedisStore', () => {
         })
     })
 
+    describe('setTtl', () => {
+        it('should set TTL on a record', async () => {
+            const record: ApiKeyRecord = {
+                id: 'test-id',
+                keyHash: 'hash123',
+                metadata: { ownerId: 'user_123' },
+            }
+
+            await store.save(record)
+            await store.setTtl('test-id', 10)
+
+            const ttl = await redis.ttl('apikey:test-id')
+            expect(ttl).toBeGreaterThan(0)
+            expect(ttl).toBeLessThanOrEqual(10)
+        })
+
+        it('should do nothing for non-existent ID', async () => {
+            await store.setTtl('non-existent', 10)
+            // Should not throw
+        })
+    })
+
     describe('custom key prefix', () => {
         it('should use custom key prefix', async () => {
             const customStore = new RedisStore({

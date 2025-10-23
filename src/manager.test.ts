@@ -634,3 +634,235 @@ describe('ApiKeyManager - Caching', () => {
         })
     })
 })
+
+describe('ApiKeyManager - Additional Operations', () => {
+    let keys: ReturnType<typeof createKeys>
+    let storage: MemoryStore
+
+    beforeEach(() => {
+        storage = new MemoryStore()
+        keys = createKeys({
+            prefix: 'sk_test_',
+            length: 32,
+            algorithm: 'sha256',
+            storage,
+        })
+    })
+
+    describe('enable/disable operations', () => {
+        it('should enable a disabled key', async () => {
+            const { key, record } = await keys.create({ ownerId: 'user_1' })
+            
+            await keys.disable(record.id)
+            const disabledResult = await keys.verify(key)
+            expect(disabledResult.valid).toBe(false)
+            expect(disabledResult.error).toBe('API key is disabled')
+
+            await keys.enable(record.id)
+            const enabledResult = await keys.verify(key)
+            expect(enabledResult.valid).toBe(true)
+        })
+
+        it('should disable an enabled key', async () => {
+            const { key, record } = await keys.create({ ownerId: 'user_1' })
+            
+            await keys.disable(record.id)
+            const result = await keys.verify(key)
+            expect(result.valid).toBe(false)
+            expect(result.error).toBe('API key is disabled')
+        })
+
+        it('should throw error when enabling non-existent key', async () => {
+            await expect(keys.enable('non-existent')).rejects.toThrow('API key not found')
+        })
+
+        it('should throw error when disabling non-existent key', async () => {
+            await expect(keys.disable('non-existent')).rejects.toThrow('API key not found')
+        })
+    })
+
+    describe('rotate operations', () => {
+        it('should rotate a key successfully', async () => {
+            const { key: oldKey, record: oldRecord } = await keys.create({ 
+                ownerId: 'user_1',
+                name: 'Old Key',
+                scopes: ['read']
+            })
+
+            const { key: newKey, record: newRecord, oldRecord: rotatedOldRecord } = await keys.rotate(oldRecord.id, {
+                name: 'New Key',
+                scopes: ['read', 'write']
+            })
+
+            expect(newKey).toBeDefined()
+            expect(newKey).not.toBe(oldKey)
+            expect(newRecord.metadata.name).toBe('New Key')
+            expect(newRecord.metadata.scopes).toEqual(['read', 'write'])
+            expect(rotatedOldRecord.id).toBe(oldRecord.id)
+
+            // Old key should be revoked
+            const oldResult = await keys.verify(oldKey)
+            expect(oldResult.valid).toBe(false)
+            expect(oldResult.error).toBe('API key has been revoked')
+
+            // New key should work
+            const newResult = await keys.verify(newKey)
+            expect(newResult.valid).toBe(true)
+        })
+
+        it('should throw error when rotating non-existent key', async () => {
+            await expect(keys.rotate('non-existent')).rejects.toThrow('API key not found')
+        })
+    })
+
+    describe('revokeAll operations', () => {
+        it('should revoke all keys for an owner', async () => {
+            const { key: key1 } = await keys.create({ ownerId: 'user_1' })
+            const { key: key2 } = await keys.create({ ownerId: 'user_1' })
+            const { key: key3 } = await keys.create({ ownerId: 'user_2' })
+
+            await keys.revokeAll('user_1')
+
+            const result1 = await keys.verify(key1)
+            const result2 = await keys.verify(key2)
+            const result3 = await keys.verify(key3)
+
+            expect(result1.valid).toBe(false)
+            expect(result2.valid).toBe(false)
+            expect(result3.valid).toBe(true) // user_2 keys should still work
+        })
+    })
+
+    describe('verifyFromHeaders', () => {
+        it('should return record when valid', async () => {
+            const { key } = await keys.create({ ownerId: 'user_1' })
+            const headers = new Headers({ 'x-api-key': key })
+
+            const record = await keys.verifyFromHeaders(headers)
+            expect(record).toBeDefined()
+            expect(record?.metadata.ownerId).toBe('user_1')
+        })
+
+        it('should return null when invalid', async () => {
+            const headers = new Headers({ 'x-api-key': 'invalid-key' })
+
+            const record = await keys.verifyFromHeaders(headers)
+            expect(record).toBeNull()
+        })
+    })
+
+    describe('scope helpers', () => {
+        it('should check hasAnyScope', async () => {
+            const { record } = await keys.create({ 
+                ownerId: 'user_1',
+                scopes: ['read', 'write']
+            })
+
+            expect(keys.hasAnyScope(record, ['read'])).toBe(true)
+            expect(keys.hasAnyScope(record, ['admin'])).toBe(false)
+            expect(keys.hasAnyScope(record, ['read', 'admin'])).toBe(true)
+        })
+
+        it('should check hasAllScopes', async () => {
+            const { record } = await keys.create({ 
+                ownerId: 'user_1',
+                scopes: ['read', 'write']
+            })
+
+            expect(keys.hasAllScopes(record, ['read'])).toBe(true)
+            expect(keys.hasAllScopes(record, ['read', 'write'])).toBe(true)
+            expect(keys.hasAllScopes(record, ['read', 'admin'])).toBe(false)
+        })
+    })
+
+    describe('resource scope checks', () => {
+        it('should check resource scope', async () => {
+            const { record } = await keys.create({ 
+                ownerId: 'user_1',
+                scopes: ['read', 'write'],
+                resources: { website: ['site1', 'site2'] }
+            })
+
+            expect(keys.checkResourceScope(record, 'website', 'site1', 'read')).toBe(true)
+            // site3 is not in resources, so it falls back to global scopes (read is present)
+            expect(keys.checkResourceScope(record, 'website', 'site3', 'read')).toBe(true)
+            expect(keys.checkResourceScope(null, 'website', 'site1', 'read')).toBe(false)
+        })
+
+        it('should check resource any scope', async () => {
+            const { record } = await keys.create({ 
+                ownerId: 'user_1',
+                scopes: ['read', 'write'],
+                resources: { website: ['site1'] }
+            })
+
+            expect(keys.checkResourceAnyScope(record, 'website', 'site1', ['read', 'admin'])).toBe(true)
+            // site2 is not in resources, so it falls back to global scopes (read is present)
+            expect(keys.checkResourceAnyScope(record, 'website', 'site2', ['read'])).toBe(true)
+            expect(keys.checkResourceAnyScope(null, 'website', 'site1', ['read'])).toBe(false)
+        })
+
+        it('should check resource all scopes', async () => {
+            const { record } = await keys.create({ 
+                ownerId: 'user_1',
+                scopes: ['read', 'write'],
+                resources: { website: ['site1'] }
+            })
+
+            expect(keys.checkResourceAllScopes(record, 'website', 'site1', ['read', 'write'])).toBe(true)
+            expect(keys.checkResourceAllScopes(record, 'website', 'site1', ['read', 'admin'])).toBe(false)
+            expect(keys.checkResourceAllScopes(null, 'website', 'site1', ['read'])).toBe(false)
+        })
+    })
+
+    describe('findByHash', () => {
+        it('should find record by hash', async () => {
+            const { key, record } = await keys.create({ ownerId: 'user_1' })
+            const keyHash = keys.hashKey(key)
+
+            const found = await keys.findByHash(keyHash)
+            expect(found).toBeDefined()
+            expect(found?.id).toBe(record.id)
+        })
+    })
+
+    describe('error handling', () => {
+        it('should handle updateLastUsed errors gracefully', async () => {
+            // Create a mock storage that throws on updateMetadata
+            const errorStorage = new MemoryStore()
+            
+            errorStorage.updateMetadata = async () => {
+                throw new Error('Database error')
+            }
+
+            const keysWithErrorStorage = createKeys({
+                prefix: 'sk_',
+                storage: errorStorage,
+                autoTrackUsage: true,
+            })
+
+            const { key } = await keysWithErrorStorage.create({ ownerId: 'user_1' })
+            
+            // This should not throw, errors should be caught
+            const result = await keysWithErrorStorage.verify(key)
+            expect(result.valid).toBe(true)
+        })
+
+        it('should handle cache deletion errors in invalidateCache', async () => {
+            const errorCache = new MemoryCache()
+            
+            errorCache.del = async () => {
+                throw new Error('Cache error')
+            }
+
+            const keysWithErrorCache = createKeys({
+                prefix: 'sk_',
+                cache: errorCache,
+            })
+
+            const { record } = await keysWithErrorCache.create({ ownerId: 'user_1' })
+            
+            await expect(keysWithErrorCache.invalidateCache(record.keyHash)).rejects.toThrow('Cache error')
+        })
+    })
+})

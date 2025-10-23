@@ -176,5 +176,23 @@ describe('scopes (with resources)', () => {
 
             expect(hasScopeWithResources([], resources, 'read', { resource: 'website:123' })).toBe(false)
         })
+
+        it('should return false when resource is not provided in options', () => {
+            const resources = {
+                'website:123': ['read']
+            }
+
+            expect(hasScopeWithResources([], resources, 'read', {})).toBe(false)
+            expect(hasScopeWithResources([], resources, 'read')).toBe(false)
+        })
+
+        it('should return false when resource is not provided in hasAllScopesWithResources', () => {
+            const resources = {
+                'website:123': ['read', 'write']
+            }
+
+            expect(hasAllScopesWithResources([], resources, ['read', 'write'], {})).toBe(false)
+            expect(hasAllScopesWithResources([], resources, ['read', 'write'])).toBe(false)
+        })
     })
 })

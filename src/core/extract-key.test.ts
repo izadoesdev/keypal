@@ -149,5 +149,31 @@ describe('extractKeyFromHeaders', () => {
             expect(hasApiKey(headers)).toBe(true)
         })
     })
+
+    describe('extractBearer option', () => {
+        it('should return full value when extractBearer is false', () => {
+            const headers = new Headers({
+                'authorization': 'Bearer sk_test_123',
+            })
+
+            const key = extractKeyFromHeaders(headers, {
+                extractBearer: false,
+            })
+
+            expect(key).toBe('Bearer sk_test_123')
+        })
+
+        it('should extract token when extractBearer is true', () => {
+            const headers = new Headers({
+                'authorization': 'Bearer sk_test_123',
+            })
+
+            const key = extractKeyFromHeaders(headers, {
+                extractBearer: true,
+            })
+
+            expect(key).toBe('sk_test_123')
+        })
+    })
 })
 

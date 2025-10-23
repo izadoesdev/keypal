@@ -49,6 +49,7 @@
   "devDependencies": {
     "@hono/node-server": "^1.19.5",
     "@types/bun": "latest",
+    "@vitest/coverage-v8": "4.0.1",
     "@vitest/ui": "^4.0.1",
     "better-sqlite3": "^12.4.1",
     "hono": "^4.10.2",

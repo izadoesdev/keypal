@@ -22,6 +22,8 @@ export interface VerifyOptions {
     skipCache?: boolean
     headerNames?: string[]
     extractBearer?: boolean
+    /** Skip updating lastUsedAt timestamp (useful when autoTrackUsage is enabled) */
+    skipTracking?: boolean
 }
 
 export class ApiKeyManager {
@@ -32,6 +34,7 @@ export class ApiKeyManager {
     private extractionOptions: KeyExtractionOptions
     private revokedKeyTtl: number
     private isRedisStorage: boolean
+    private autoTrackUsage: boolean
 
     constructor(config: ConfigInput = {}) {
         this.config = {
@@ -44,6 +47,7 @@ export class ApiKeyManager {
 
         this.revokedKeyTtl = config.revokedKeyTtl ?? 604800 // 7 days default
         this.isRedisStorage = config.storage === 'redis'
+        this.autoTrackUsage = config.autoTrackUsage ?? false
 
         if (config.storage === 'redis') {
             if (!config.redis) {
@@ -176,6 +180,13 @@ export class ApiKeyManager {
                         return { valid: false, error: 'API key is disabled' }
                     }
 
+                    // Track usage if enabled
+                    if (this.autoTrackUsage && !options.skipTracking) {
+                        this.updateLastUsed(record.id).catch((err) => {
+                            console.error('[better-api-keys] Failed to track usage:', err)
+                        })
+                    }
+
                     return { valid: true, record }
                 } catch (error) {
                     console.error('[better-api-keys] CRITICAL: Cache corruption detected, invalidating entry:', error)
@@ -215,6 +226,13 @@ export class ApiKeyManager {
             } catch (error) {
                 console.error('[better-api-keys] CRITICAL: Failed to write to cache:', error)
             }
+        }
+
+        // Track usage if enabled
+        if (this.autoTrackUsage && !options.skipTracking) {
+            this.updateLastUsed(record.id).catch((err) => {
+                console.error('[better-api-keys] Failed to track usage:', err)
+            })
         }
 
         return { valid: true, record }

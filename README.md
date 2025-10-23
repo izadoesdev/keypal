@@ -77,6 +77,9 @@ const keys = createKeys({
   // Revocation
   revokedKeyTtl: 604800, // TTL for revoked keys in Redis (7 days), set to 0 to keep forever
   
+  // Usage tracking
+  autoTrackUsage: true, // Automatically update lastUsedAt on verify
+  
   // Header detection
   headerNames: ['x-api-key', 'authorization'],
   extractBearer: true,
@@ -132,6 +135,7 @@ const result = await keys.verify('Bearer sk_abc123')
 const result = await keys.verify(headers, {
   headerNames: ['x-custom-key'],
   skipCache: true,
+  skipTracking: true, // Skip updating lastUsedAt (useful when autoTrackUsage is enabled)
 })
 
 // Check result
@@ -149,6 +153,21 @@ if (keys.hasScope(record, 'write')) { /* ... */ }
 if (keys.hasAnyScope(record, ['admin', 'moderator'])) { /* ... */ }
 if (keys.hasAllScopes(record, ['read', 'write'])) { /* ... */ }
 if (keys.isExpired(record)) { /* ... */ }
+```
+
+### Usage Tracking
+
+```typescript
+// Enable automatic tracking in config
+const keys = createKeys({
+  autoTrackUsage: true, // Automatically updates lastUsedAt on verify
+})
+
+// Manually update (always available)
+await keys.updateLastUsed(record.id)
+
+// Skip tracking for specific requests
+const result = await keys.verify(headers, { skipTracking: true })
 ```
 
 ### Helper Methods

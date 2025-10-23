@@ -2,6 +2,13 @@ import { createHash } from 'node:crypto'
 
 export type HashAlgorithm = 'sha256' | 'sha512'
 
-export function hashKey(key: string, algorithm: HashAlgorithm = 'sha256'): string {
-    return createHash(algorithm).update(key).digest('hex')
+export interface HashKeyOptions {
+    algorithm?: HashAlgorithm
+    salt?: string
+}
+
+export function hashKey(key: string, options: HashKeyOptions = {}): string {
+    const { algorithm = 'sha256', salt = '' } = options
+    const input = salt ? `${key}${salt}` : key
+    return createHash(algorithm).update(input).digest('hex')
 }

@@ -7,13 +7,12 @@ describe('hashKey', () => {
         const hash = hashKey(key)
 
         expect(hash).toBeDefined()
-        expect(typeof hash).toBe('string')
-        expect(hash.length).toBe(64) // SHA-256 produces 64 hex characters
+        expect(hash.length).toBe(64)
     })
 
     it('should hash a key with sha256 explicitly', () => {
         const key = 'test-key-123'
-        const hash = hashKey(key, 'sha256')
+        const hash = hashKey(key, { algorithm: 'sha256' })
 
         expect(hash).toBeDefined()
         expect(hash.length).toBe(64)
@@ -21,10 +20,10 @@ describe('hashKey', () => {
 
     it('should hash a key with sha512', () => {
         const key = 'test-key-123'
-        const hash = hashKey(key, 'sha512')
+        const hash = hashKey(key, { algorithm: 'sha512' })
 
         expect(hash).toBeDefined()
-        expect(hash.length).toBe(128) // SHA-512 produces 128 hex characters
+        expect(hash.length).toBe(128)
     })
 
     it('should produce consistent hashes for same input', () => {
@@ -36,8 +35,11 @@ describe('hashKey', () => {
     })
 
     it('should produce different hashes for different inputs', () => {
-        const hash1 = hashKey('key1')
-        const hash2 = hashKey('key2')
+        const key1 = 'test-key-123'
+        const key2 = 'test-key-456'
+
+        const hash1 = hashKey(key1)
+        const hash2 = hashKey(key2)
 
         expect(hash1).not.toBe(hash2)
     })
@@ -51,32 +53,58 @@ describe('hashKey', () => {
     it('should handle very long keys', () => {
         const longKey = 'a'.repeat(10000)
         const hash = hashKey(longKey)
+
         expect(hash).toBeDefined()
         expect(hash.length).toBe(64)
     })
 
     it('should handle special characters', () => {
-        const specialKey = '!@#$%^&*()_+-=[]{}|;:,.<>?'
-        const hash = hashKey(specialKey)
+        const key = '!@#$%^&*()_+-=[]{}|;:,.<>?'
+        const hash = hashKey(key)
+
         expect(hash).toBeDefined()
         expect(hash.length).toBe(64)
     })
 
     it('should handle unicode characters', () => {
-        const unicodeKey = '你好世界 🌍'
-        const hash = hashKey(unicodeKey)
+        const key = '测试密钥🔑'
+        const hash = hashKey(key)
+
         expect(hash).toBeDefined()
         expect(hash.length).toBe(64)
     })
 
     it('should produce different hashes with different algorithms', () => {
-        const key = 'test-key'
-        const sha256Hash = hashKey(key, 'sha256')
-        const sha512Hash = hashKey(key, 'sha512')
+        const key = 'test-key-123'
+        const sha256Hash = hashKey(key, { algorithm: 'sha256' })
+        const sha512Hash = hashKey(key, { algorithm: 'sha512' })
 
         expect(sha256Hash).not.toBe(sha512Hash)
         expect(sha256Hash.length).toBe(64)
         expect(sha512Hash.length).toBe(128)
     })
-})
 
+    it('should use salt when provided', () => {
+        const key = 'test-key-123'
+        const hashWithoutSalt = hashKey(key)
+        const hashWithSalt = hashKey(key, { salt: 'secret-salt' })
+
+        expect(hashWithoutSalt).not.toBe(hashWithSalt)
+    })
+
+    it('should produce consistent hashes with same salt', () => {
+        const key = 'test-key-123'
+        const hash1 = hashKey(key, { salt: 'secret-salt' })
+        const hash2 = hashKey(key, { salt: 'secret-salt' })
+
+        expect(hash1).toBe(hash2)
+    })
+
+    it('should produce different hashes with different salts', () => {
+        const key = 'test-key-123'
+        const hash1 = hashKey(key, { salt: 'salt1' })
+        const hash2 = hashKey(key, { salt: 'salt2' })
+
+        expect(hash1).not.toBe(hash2)
+    })
+})

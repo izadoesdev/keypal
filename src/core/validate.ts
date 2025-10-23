@@ -1,12 +1,12 @@
 import { timingSafeEqual } from 'node:crypto'
-import { hashKey, type HashAlgorithm } from './hash'
+import { hashKey, type HashKeyOptions } from './hash'
 
 export function validateKey(
     key: string,
     storedHash: string,
-    algorithm: HashAlgorithm = 'sha256'
+    options: HashKeyOptions = {}
 ): boolean {
-    const computedHash = hashKey(key, algorithm)
+    const computedHash = hashKey(key, options)
 
     if (computedHash.length !== storedHash.length) {
         return false

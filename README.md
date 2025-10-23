@@ -50,11 +50,44 @@ if (result.valid) {
 import { createKeys } from 'better-api-keys'
 
 const keys = createKeys({
-  prefix: 'sk_prod_',     // Optional: prefix for generated keys
-  length: 32,             // Optional: length of random portion (default: 32)
-  algorithm: 'sha256',    // Optional: 'sha256' or 'sha512' (default: 'sha256')
+  prefix: 'sk_prod_',           // Optional: prefix for generated keys
+  length: 32,                   // Optional: length of random portion (default: 32)
+  algorithm: 'sha256',          // Optional: 'sha256' or 'sha512' (default: 'sha256')
+  alphabet: 'ABC...xyz123',     // Optional: custom alphabet for key generation
+  salt: 'your-secret-salt',     // Optional: salt for additional hashing security
 })
 ```
+
+### Custom Alphabet
+
+You can specify a custom alphabet for key generation:
+
+```typescript
+// Only uppercase letters and numbers
+const keys = createKeys({
+  prefix: 'KEY_',
+  alphabet: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789',
+})
+
+// URL-safe characters only
+const keys = createKeys({
+  alphabet: 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_',
+})
+```
+
+### Salt for Enhanced Security
+
+Adding a salt provides an additional layer of security:
+
+```typescript
+const keys = createKeys({
+  prefix: 'sk_',
+  salt: process.env.API_KEY_SALT, // Keep this secret!
+  algorithm: 'sha512',
+})
+```
+
+**Important:** If you use a salt, you must use the same salt for all operations. Store it securely (environment variable, secrets manager).
 
 ## API Reference
 
@@ -93,6 +126,9 @@ const userKeys = await keys.list('user_123')
 
 // Find by ID
 const record = await keys.findById('key_id')
+
+// Update last used timestamp
+await keys.updateLastUsed('key_id')
 
 // Revoke a single key
 await keys.revoke('key_id')
@@ -310,9 +346,20 @@ import type {
 
 - API keys are hashed before storage using SHA-256 or SHA-512
 - Validation uses timing-safe comparison to prevent timing attacks
-- Keys are generated using cryptographically secure random bytes
+- Keys are generated using cryptographically secure random bytes from `nanoid`
+- Optional salt support for additional hashing security
+- Custom alphabet support for specialized key formats
 - The plain-text key is only returned once during creation
 - Store keys securely on the client side (environment variables, secure vaults)
+
+### Best Practices
+
+1. **Use a salt in production**: Add a secret salt to your configuration
+2. **Keep salt secret**: Store salt in environment variables or secrets manager
+3. **Use SHA-512 for high-security applications**: More secure than SHA-256
+4. **Rotate keys regularly**: Implement key rotation policies
+5. **Set expiration dates**: Don't create keys that never expire
+6. **Monitor usage**: Track `lastUsedAt` to identify unused keys
 
 ## License
 

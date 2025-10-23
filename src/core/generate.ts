@@ -1,15 +1,16 @@
 import { customAlphabet } from 'nanoid'
 
-const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'
-const nanoid = customAlphabet(alphabet, 32)
+const defaultAlphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'
 
 export interface GenerateKeyOptions {
     prefix?: string
     length?: number
+    alphabet?: string
 }
 
 export function generateKey(options: GenerateKeyOptions = {}): string {
-    const { prefix = '', length = 32 } = options
-    const key = nanoid(length)
+    const { prefix = '', length = 32, alphabet = defaultAlphabet } = options
+    const nanoid = customAlphabet(alphabet, length)
+    const key = nanoid()
     return prefix ? `${prefix}${key}` : key
 }

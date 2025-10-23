@@ -79,4 +79,13 @@ export interface DrizzleColumnMapping {
 
     /** Column name for last used date (default: 'lastUsedAt') */
     lastUsedAt?: string
+
+    /** Column name for enabled status (default: 'enabled') */
+    enabled?: string
+
+    /** Column name for revoked date (default: 'revokedAt') */
+    revokedAt?: string
+
+    /** Column name for rotated to key ID (default: 'rotatedTo') */
+    rotatedTo?: string
 }

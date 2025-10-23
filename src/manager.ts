@@ -30,6 +30,8 @@ export class ApiKeyManager {
     private cache?: Cache
     private cacheTtl: number
     private extractionOptions: KeyExtractionOptions
+    private revokedKeyTtl: number
+    private isRedisStorage: boolean
 
     constructor(config: ConfigInput = {}) {
         this.config = {
@@ -39,6 +41,9 @@ export class ApiKeyManager {
             alphabet: config.alphabet,
             salt: config.salt,
         }
+
+        this.revokedKeyTtl = config.revokedKeyTtl ?? 604800 // 7 days default
+        this.isRedisStorage = config.storage === 'redis'
 
         if (config.storage === 'redis') {
             if (!config.redis) {
@@ -156,6 +161,16 @@ export class ApiKeyManager {
             if (cached) {
                 try {
                     const record = JSON.parse(cached) as ApiKeyRecord
+
+                    if (record.metadata.enabled === false) {
+                        return { valid: false, error: 'API key is disabled' }
+                    }
+
+                    if (record.metadata.revokedAt) {
+                        await this.cache.del(`apikey:${keyHash}`)
+                        return { valid: false, error: 'API key has been revoked' }
+                    }
+
                     if (!isExpired(record.metadata.expiresAt)) {
                         return { valid: true, record }
                     }
@@ -171,6 +186,17 @@ export class ApiKeyManager {
 
         if (!record) {
             return { valid: false, error: 'Invalid API key' }
+        }
+
+        if (record.metadata.enabled === false) {
+            return { valid: false, error: 'API key is disabled' }
+        }
+
+        if (record.metadata.revokedAt) {
+            if (this.cache) {
+                await this.cache.del(`apikey:${keyHash}`)
+            }
+            return { valid: false, error: 'API key has been revoked' }
         }
 
         if (isExpired(record.metadata.expiresAt)) {
@@ -207,6 +233,9 @@ export class ApiKeyManager {
                 expiresAt: metadata.expiresAt ?? null,
                 createdAt: now,
                 lastUsedAt: undefined,
+                enabled: metadata.enabled ?? true,
+                revokedAt: null,
+                rotatedTo: null,
             },
         }
 
@@ -228,28 +257,117 @@ export class ApiKeyManager {
 
     async revoke(id: string): Promise<void> {
         const record = await this.findById(id)
-        if (record && this.cache) {
+        if (!record) return
+
+        await this.storage.updateMetadata(id, {
+            revokedAt: new Date().toISOString(),
+        })
+
+        if (this.cache) {
             try {
                 await this.cache.del(`apikey:${record.keyHash}`)
             } catch (error) {
                 console.error('[better-api-keys] CRITICAL: Failed to invalidate cache on revoke:', error)
             }
         }
-        return this.storage.delete(id)
+
+        if (this.isRedisStorage && this.revokedKeyTtl > 0) {
+            try {
+                const { RedisStore } = require('./storage/redis')
+                if (this.storage instanceof RedisStore) {
+                    await (this.storage as any).setTtl(id, this.revokedKeyTtl)
+                }
+            } catch (error) {
+                console.error('[better-api-keys] Failed to set TTL on revoked key:', error)
+            }
+        }
     }
 
     async revokeAll(ownerId: string): Promise<void> {
+        const records = await this.list(ownerId)
+
+        for (const record of records) {
+            await this.revoke(record.id)
+        }
+    }
+
+    async enable(id: string): Promise<void> {
+        const record = await this.findById(id)
+        if (!record) {
+            throw new Error('API key not found')
+        }
+
+        await this.storage.updateMetadata(id, {
+            enabled: true,
+        })
+
         if (this.cache) {
-            const records = await this.list(ownerId)
-            for (const record of records) {
-                try {
-                    await this.cache.del(`apikey:${record.keyHash}`)
-                } catch (error) {
-                    console.error('[better-api-keys] CRITICAL: Failed to invalidate cache on revokeAll:', error)
-                }
+            try {
+                await this.cache.del(`apikey:${record.keyHash}`)
+            } catch (error) {
+                console.error('[better-api-keys] CRITICAL: Failed to invalidate cache on enable:', error)
             }
         }
-        return this.storage.deleteByOwner(ownerId)
+    }
+
+    async disable(id: string): Promise<void> {
+        const record = await this.findById(id)
+        if (!record) {
+            throw new Error('API key not found')
+        }
+
+        await this.storage.updateMetadata(id, {
+            enabled: false,
+        })
+
+        if (this.cache) {
+            try {
+                await this.cache.del(`apikey:${record.keyHash}`)
+            } catch (error) {
+                console.error('[better-api-keys] CRITICAL: Failed to invalidate cache on disable:', error)
+            }
+        }
+    }
+
+    async rotate(id: string, metadata?: Partial<ApiKeyMetadata>): Promise<{ key: string; record: ApiKeyRecord; oldRecord: ApiKeyRecord }> {
+        const oldRecord = await this.findById(id)
+        if (!oldRecord) {
+            throw new Error('API key not found')
+        }
+
+        const { key, record: newRecord } = await this.create({
+            ownerId: oldRecord.metadata.ownerId,
+            name: metadata?.name ?? oldRecord.metadata.name,
+            description: metadata?.description ?? oldRecord.metadata.description,
+            scopes: metadata?.scopes ?? oldRecord.metadata.scopes,
+            expiresAt: metadata?.expiresAt ?? oldRecord.metadata.expiresAt,
+        })
+
+        await this.storage.updateMetadata(id, {
+            rotatedTo: newRecord.id,
+            revokedAt: new Date().toISOString(),
+        })
+
+        if (this.cache) {
+            try {
+                await this.cache.del(`apikey:${oldRecord.keyHash}`)
+            } catch (error) {
+                console.error('[better-api-keys] CRITICAL: Failed to invalidate cache on rotate:', error)
+            }
+        }
+
+        if (this.isRedisStorage && this.revokedKeyTtl > 0) {
+            try {
+                const { RedisStore } = require('./storage/redis')
+                if (this.storage instanceof RedisStore) {
+                    await (this.storage as any).setTtl(id, this.revokedKeyTtl)
+                }
+            } catch (error) {
+                console.error('[better-api-keys] Failed to set TTL on rotated key:', error)
+            }
+        }
+
+        return { key, record: newRecord, oldRecord }
     }
 
     async updateLastUsed(id: string): Promise<void> {

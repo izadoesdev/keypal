@@ -90,4 +90,14 @@ export class RedisStore implements Storage {
         pipeline.del(this.ownerKey(ownerId))
         await pipeline.exec()
     }
+
+    async setTtl(id: string, ttlSeconds: number): Promise<void> {
+        const record = await this.findById(id)
+        if (!record) return
+
+        const pipeline = this.redis.pipeline()
+        pipeline.expire(this.key(id), ttlSeconds)
+        pipeline.expire(this.hashKey(record.keyHash), ttlSeconds)
+        await pipeline.exec()
+    }
 }

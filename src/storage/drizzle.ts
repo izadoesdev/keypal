@@ -25,6 +25,9 @@ export class DrizzleStore implements Storage {
             expiresAt: options.columns?.expiresAt ?? 'expiresAt',
             createdAt: options.columns?.createdAt ?? 'createdAt',
             lastUsedAt: options.columns?.lastUsedAt ?? 'lastUsedAt',
+            enabled: options.columns?.enabled ?? 'enabled',
+            revokedAt: options.columns?.revokedAt ?? 'revokedAt',
+            rotatedTo: options.columns?.rotatedTo ?? 'rotatedTo',
         }
     }
 
@@ -40,6 +43,9 @@ export class DrizzleStore implements Storage {
                 expiresAt: row[this.columns.expiresAt] ?? null,
                 createdAt: row[this.columns.createdAt] ?? undefined,
                 lastUsedAt: row[this.columns.lastUsedAt] ?? undefined,
+                enabled: row[this.columns.enabled] ?? true,
+                revokedAt: row[this.columns.revokedAt] ?? null,
+                rotatedTo: row[this.columns.rotatedTo] ?? null,
             },
         }
     }
@@ -55,6 +61,9 @@ export class DrizzleStore implements Storage {
             [this.columns.expiresAt]: record.metadata.expiresAt ?? null,
             [this.columns.createdAt]: record.metadata.createdAt ?? null,
             [this.columns.lastUsedAt]: record.metadata.lastUsedAt ?? null,
+            [this.columns.enabled]: record.metadata.enabled ?? true,
+            [this.columns.revokedAt]: record.metadata.revokedAt ?? null,
+            [this.columns.rotatedTo]: record.metadata.rotatedTo ?? null,
         }
     }
 
@@ -100,6 +109,9 @@ export class DrizzleStore implements Storage {
         if (metadata.scopes !== undefined) updates[this.columns.scopes] = JSON.stringify(metadata.scopes)
         if (metadata.expiresAt !== undefined) updates[this.columns.expiresAt] = metadata.expiresAt
         if (metadata.lastUsedAt !== undefined) updates[this.columns.lastUsedAt] = metadata.lastUsedAt
+        if (metadata.enabled !== undefined) updates[this.columns.enabled] = metadata.enabled
+        if (metadata.revokedAt !== undefined) updates[this.columns.revokedAt] = metadata.revokedAt
+        if (metadata.rotatedTo !== undefined) updates[this.columns.rotatedTo] = metadata.rotatedTo
 
         await this.db
             .update(this.table)

@@ -24,6 +24,15 @@ export const ApiKeyMetadataSchema = Type.Object({
 
     /** ISO timestamp when the key was last used */
     lastUsedAt: Type.Optional(Type.String()),
+
+    /** Whether the key is enabled (default: true) */
+    enabled: Type.Optional(Type.Boolean()),
+
+    /** ISO timestamp when the key was revoked (null if not revoked) */
+    revokedAt: Type.Optional(Type.Union([Type.String(), Type.Null()])),
+
+    /** ID of the key this was rotated to (for key rotation) */
+    rotatedTo: Type.Optional(Type.Union([Type.String(), Type.Null()])),
 })
 
 export type ApiKeyMetadata = Static<typeof ApiKeyMetadataSchema>

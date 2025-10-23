@@ -27,4 +27,6 @@ export interface ConfigInput {
     headerNames?: string[]
     extractBearer?: boolean
     redis?: any
+    /** TTL in seconds for revoked keys in Redis (default: 604800 = 7 days). Set to 0 to keep forever. */
+    revokedKeyTtl?: number
 }

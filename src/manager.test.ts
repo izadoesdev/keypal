@@ -200,17 +200,25 @@ describe('ApiKeyManager', () => {
             await keys.revoke(record.id)
 
             const found = await keys.findById(record.id)
-            expect(found).toBeNull()
+            expect(found).not.toBeNull()
+            expect(found?.metadata.revokedAt).toBeDefined()
         })
 
         it('should revoke all keys for an owner', async () => {
-            await keys.create({ ownerId: 'user_123' })
-            await keys.create({ ownerId: 'user_123' })
+            const { key: key1 } = await keys.create({ ownerId: 'user_123' })
+            const { key: key2 } = await keys.create({ ownerId: 'user_123' })
 
             await keys.revokeAll('user_123')
 
             const keyList = await keys.list('user_123')
-            expect(keyList.length).toBe(0)
+            expect(keyList.length).toBe(2)
+            expect(keyList[0]?.metadata.revokedAt).toBeDefined()
+            expect(keyList[1]?.metadata.revokedAt).toBeDefined()
+
+            const result1 = await keys.verify(key1)
+            const result2 = await keys.verify(key2)
+            expect(result1.valid).toBe(false)
+            expect(result2.valid).toBe(false)
         })
     })
 
@@ -231,7 +239,8 @@ describe('ApiKeyManager', () => {
             // Revoke
             await keys.revoke(record.id)
             const afterRevoke = await keys.findById(record.id)
-            expect(afterRevoke).toBeNull()
+            expect(afterRevoke).not.toBeNull()
+            expect(afterRevoke?.metadata.revokedAt).toBeDefined()
         })
 
         it('should handle multiple keys for the same owner', async () => {

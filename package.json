@@ -61,7 +61,7 @@
     "build": "unbuild",
     "test": "vitest",
     "test:ui": "vitest --ui",
-    "test:run": "vitest run",
+    "test:coverage": "vitest --coverage",
     "test:redis": "vitest run src/storage/redis.test.ts",
     "test:drizzle": "vitest run src/storage/drizzle.test.ts",
     "bench": "bun run benchmark.ts",

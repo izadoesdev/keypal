@@ -1,3 +1,4 @@
+// biome-ignore lint/performance/noBarrelFile: This is a public API
 export { type Cache, MemoryCache, RedisCache } from "./core/cache";
 export { getExpirationTime, isExpired } from "./core/expiration";
 export {

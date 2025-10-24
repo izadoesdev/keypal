@@ -4,5 +4,15 @@ export default defineConfig({
 	test: {
 		globals: true,
 		environment: "node",
+		coverage: {
+			provider: "v8",
+			exclude: ["src/utils/logger.ts"],
+			thresholds: {
+				lines: 85,
+				functions: 95,
+				branches: 80,
+				statements: 85,
+			},
+		},
 	},
 });

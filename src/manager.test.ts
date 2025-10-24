@@ -913,4 +913,199 @@ describe("ApiKeyManager - Additional Operations", () => {
 			).rejects.toThrow("Cache error");
 		});
 	});
+
+	describe("missing key validation", () => {
+		it("should return error when API key is missing", async () => {
+			const result = await keys.verify("");
+			expect(result.valid).toBe(false);
+			expect(result.error).toBe("Missing API key");
+		});
+
+		it("should return error when API key is undefined", async () => {
+			const result = await keys.verify(undefined as unknown as string);
+			expect(result.valid).toBe(false);
+			expect(result.error).toBe("Missing API key");
+		});
+	});
+
+	describe("cache error handling", () => {
+		it("should handle cache write errors during verify", async () => {
+			const errorCache = new MemoryCache();
+			errorCache.set = vi
+				.fn()
+				.mockRejectedValue(new Error("Cache write failed"));
+
+			const keysWithErrorCache = createKeys({
+				prefix: "sk_",
+				cache: errorCache,
+			});
+
+			const { key } = await keysWithErrorCache.create({ ownerId: "user_1" });
+			const result = await keysWithErrorCache.verify(key);
+
+			expect(result.valid).toBe(true);
+		});
+
+		it("should handle cache corruption gracefully", async () => {
+			const cache = new MemoryCache();
+			const keysWithCache = createKeys({
+				prefix: "sk_",
+				cache,
+			});
+
+			const { key } = await keysWithCache.create({ ownerId: "user_1" });
+			const keyHash = keysWithCache.hashKey(key);
+
+			// Simulate cache corruption with invalid JSON
+			await cache.set(`apikey:${keyHash}`, "invalid json", 60);
+
+			const result = await keysWithCache.verify(key);
+			expect(result.valid).toBe(true);
+		});
+
+		it("should handle cache del errors during revoke", async () => {
+			const errorCache = new MemoryCache();
+			errorCache.del = vi.fn().mockRejectedValue(new Error("Cache del failed"));
+
+			const keysWithErrorCache = createKeys({
+				prefix: "sk_",
+				cache: errorCache,
+			});
+
+			const { key, record } = await keysWithErrorCache.create({
+				ownerId: "user_1",
+			});
+			await keysWithErrorCache.verify(key);
+
+			// Revoke should succeed even if cache fails
+			const result = await keysWithErrorCache.revoke(record.id);
+			expect(result).toBeUndefined();
+		});
+
+		it("should handle cache del errors during enable", async () => {
+			const errorCache = new MemoryCache();
+			errorCache.del = vi.fn().mockRejectedValue(new Error("Cache del failed"));
+
+			const keysWithErrorCache = createKeys({
+				prefix: "sk_",
+				cache: errorCache,
+			});
+
+			const { record } = await keysWithErrorCache.create({ ownerId: "user_1" });
+			await keysWithErrorCache.disable(record.id);
+
+			// Enable should succeed even if cache fails
+			await keysWithErrorCache.enable(record.id);
+			const result = await keysWithErrorCache.verifyFromHeaders({
+				"x-api-key": record.keyHash,
+			});
+			expect(result).toBeNull(); // Can't verify with hash, but should not throw
+		});
+
+		it("should handle cache del errors during disable", async () => {
+			const errorCache = new MemoryCache();
+			errorCache.del = vi.fn().mockRejectedValue(new Error("Cache del failed"));
+
+			const keysWithErrorCache = createKeys({
+				prefix: "sk_",
+				cache: errorCache,
+			});
+
+			const { record } = await keysWithErrorCache.create({ ownerId: "user_1" });
+
+			// Disable should succeed even if cache fails
+			await keysWithErrorCache.disable(record.id);
+		});
+
+		it("should handle cache del errors during rotate", async () => {
+			const errorCache = new MemoryCache();
+			errorCache.del = vi.fn().mockRejectedValue(new Error("Cache del failed"));
+
+			const keysWithErrorCache = createKeys({
+				prefix: "sk_",
+				cache: errorCache,
+			});
+
+			const { record } = await keysWithErrorCache.create({ ownerId: "user_1" });
+
+			// Rotate should succeed even if cache fails
+			const rotateResult = await keysWithErrorCache.rotate(record.id);
+			expect(rotateResult).toBeDefined();
+			expect(rotateResult.key).toBeDefined();
+		});
+	});
+
+	describe("cache cleanup on invalid keys", () => {
+		it("should clean up expired keys from cache", async () => {
+			const cache = new MemoryCache();
+			const keysWithCache = createKeys({
+				prefix: "sk_",
+				cache,
+			});
+
+			const pastDate = new Date();
+			pastDate.setFullYear(pastDate.getFullYear() - 1);
+
+			const { key } = await keysWithCache.create({
+				ownerId: "user_1",
+				expiresAt: pastDate.toISOString(),
+			});
+
+			const keyHash = keysWithCache.hashKey(key);
+			await cache.set(
+				`apikey:${keyHash}`,
+				JSON.stringify({ test: "data" }),
+				60
+			);
+
+			const result = await keysWithCache.verify(key);
+			expect(result.valid).toBe(false);
+
+			// Verify cache was cleaned up
+			const cached = await cache.get(`apikey:${keyHash}`);
+			expect(cached).toBeNull();
+		});
+
+		it("should clean up revoked keys from cache", async () => {
+			const cache = new MemoryCache();
+			const keysWithCache = createKeys({
+				prefix: "sk_",
+				cache,
+			});
+
+			const { key, record } = await keysWithCache.create({ ownerId: "user_1" });
+			const keyHash = keysWithCache.hashKey(key);
+
+			// Verify once to populate cache
+			await keysWithCache.verify(key);
+
+			// Revoke the key
+			await keysWithCache.revoke(record.id);
+
+			// Verify cache was cleaned up
+			const cached = await cache.get(`apikey:${keyHash}`);
+			expect(cached).toBeNull();
+		});
+
+		it("should reject disabled keys from cache", async () => {
+			const cache = new MemoryCache();
+			const keysWithCache = createKeys({
+				prefix: "sk_",
+				cache,
+			});
+
+			const { key, record } = await keysWithCache.create({ ownerId: "user_1" });
+			const keyHash = keysWithCache.hashKey(key);
+
+			// Verify once to populate cache
+			await keysWithCache.verify(key);
+
+			// Disable the key
+			await keysWithCache.disable(record.id);
+
+			// Verify cache was cleaned up
+			const cached = await cache.get(`apikey:${keyHash}`);
+			expect(cached).toBeNull();
+		});
+	});
 });

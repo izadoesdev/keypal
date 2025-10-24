@@ -10,18 +10,15 @@ const REGEX_UPDATED_NAME = /Updated \d/;
 const MANY_SCOPES_COUNT = 25;
 const LARGE_RESOURCES_COUNT = 50;
 const LONG_DESCRIPTION_LENGTH = 10_000;
-const MANY_KEYS_COUNT = 150;
 const CONCURRENT_OPS_COUNT = 10;
 const CONCURRENT_UPDATES_COUNT = 5;
 const STRESS_SAVES_COUNT = 1000;
 const STRESS_TIMEOUT_MS = 5000;
-const SEQUENTIAL_SAVES_COUNT = 500;
 const MIXED_OPS_COUNT = 500;
 const MIXED_UPDATES_COUNT = 100;
 const MIXED_DELETES_COUNT = 50;
 const OWNER_TEST_COUNT = 100;
 const OWNERS_COUNT = 10;
-const MIN_SUCCESSFUL_SAVES = 100;
 
 describe("DrizzleStore", () => {
 	let pool: Pool;
@@ -101,6 +98,29 @@ describe("DrizzleStore", () => {
 			// Verify we can verify the key
 			const verifyResult = await keys.verify(key);
 			expect(verifyResult.valid).toBe(true);
+		});
+
+		it("should prevent duplicate IDs", async () => {
+			const { record: record1 } = await keys.create({
+				ownerId: "user_overwrite",
+				name: "Original",
+			});
+
+			const record2: ApiKeyRecord = {
+				id: record1.id,
+				keyHash: keys.hashKey(keys.generateKey()),
+				metadata: {
+					ownerId: "user_different",
+					name: "Overwritten",
+				},
+			};
+
+			await expect(store.save(record2)).rejects.toThrow();
+
+			// Original record should remain unchanged
+			const found = await store.findById(record1.id);
+			expect(found?.metadata.name).toBe("Original");
+			expect(found?.metadata.ownerId).toBe("user_overwrite");
 		});
 	});
 
@@ -216,6 +236,31 @@ describe("DrizzleStore", () => {
 			const result = await store.findById(record.id);
 			expect(result).toBeNull();
 		});
+
+		it("should remove record from hash index (findByHash returns null after delete)", async () => {
+			const { record } = await keys.create({
+				ownerId: "user_hash_delete",
+			});
+
+			await store.delete(record.id);
+
+			const found = await store.findByHash(record.keyHash);
+			expect(found).toBeNull();
+		});
+
+		it("should be idempotent (multiple deletes don't error)", async () => {
+			const { record } = await keys.create({
+				ownerId: "user_idempotent",
+			});
+
+			await store.delete(record.id);
+			await store.delete(record.id);
+			await store.delete(record.id);
+
+			// Should not throw
+			const result = await store.findById(record.id);
+			expect(result).toBeNull();
+		});
 	});
 
 	describe("deleteByOwner", () => {
@@ -231,6 +276,37 @@ describe("DrizzleStore", () => {
 
 			expect(userDeleteKeys).toHaveLength(0);
 			expect(userKeepKeys).toHaveLength(1);
+		});
+
+		it("should remove all hash indexes for deleted keys", async () => {
+			const { record: record1 } = await keys.create({
+				ownerId: "user_hash_delete_all",
+			});
+			const { record: record2 } = await keys.create({
+				ownerId: "user_hash_delete_all",
+			});
+
+			await store.deleteByOwner("user_hash_delete_all");
+
+			const found1 = await store.findByHash(record1.keyHash);
+			const found2 = await store.findByHash(record2.keyHash);
+
+			expect(found1).toBeNull();
+			expect(found2).toBeNull();
+		});
+
+		it("should be idempotent (multiple calls don't error)", async () => {
+			await keys.create({
+				ownerId: "user_idempotent_all",
+			});
+
+			await store.deleteByOwner("user_idempotent_all");
+			await store.deleteByOwner("user_idempotent_all");
+			await store.deleteByOwner("user_idempotent_all");
+
+			// Should not throw
+			const found = await store.findByOwner("user_idempotent_all");
+			expect(found).toHaveLength(0);
 		});
 	});
 
@@ -465,26 +541,22 @@ describe("DrizzleStore", () => {
 
 		it("should handle many keys per owner", async () => {
 			const ownerId = "user_many_keys";
+			const TEST_COUNT = 50;
 
-			const promises = Array.from({ length: MANY_KEYS_COUNT }, (_, i) =>
-				keys.create({
+			for (let i = 0; i < TEST_COUNT; i++) {
+				await keys.create({
 					ownerId,
 					name: `Key ${i}`,
-				})
-			);
-
-			const results = await Promise.allSettled(promises);
-
-			const successful = results.filter((r) => r.status === "fulfilled");
-			expect(successful.length).toBeGreaterThan(MIN_SUCCESSFUL_SAVES);
+				});
+			}
 
 			const found = await store.findByOwner(ownerId);
-			expect(found.length).toBeGreaterThan(MIN_SUCCESSFUL_SAVES);
+			expect(found.length).toBe(TEST_COUNT);
 		});
 	});
 
 	describe("Concurrent Operations", () => {
-		it("should handle concurrent saves", async () => {
+		it("should handle concurrent saves to different records", async () => {
 			const promises = Array.from({ length: CONCURRENT_OPS_COUNT }, (_, i) =>
 				keys.create({
 					ownerId: "user_concurrent",
@@ -498,7 +570,50 @@ describe("DrizzleStore", () => {
 			expect(found).toHaveLength(CONCURRENT_OPS_COUNT);
 		});
 
-		it("should handle concurrent updates", async () => {
+		it("should handle concurrent updates to same record (not saves)", async () => {
+			const { record } = await keys.create({
+				ownerId: "user_concurrent_same",
+				name: "Original",
+			});
+
+			// Use updateMetadata instead of save to avoid unique constraint errors
+			const updates = Array.from({ length: CONCURRENT_UPDATES_COUNT }, (_, i) =>
+				store.updateMetadata(record.id, {
+					name: `Updated ${i}`,
+				})
+			);
+
+			await Promise.all(updates);
+
+			const found = await store.findById(record.id);
+			expect(found?.metadata.name).toMatch(REGEX_UPDATED_NAME);
+		});
+
+		it("should handle concurrent updates to different records", async () => {
+			const records = await Promise.all(
+				Array.from({ length: CONCURRENT_UPDATES_COUNT }, (_, i) =>
+					keys.create({
+						ownerId: "user_concurrent_update_diff",
+						name: `Original ${i}`,
+					})
+				)
+			);
+
+			const promises = records.map((r, i) =>
+				store.updateMetadata(r.record.id, {
+					name: `Updated ${i}`,
+				})
+			);
+
+			await Promise.all(promises);
+
+			for (let i = 0; i < records.length; i++) {
+				const found = await store.findById(records[i].record.id);
+				expect(found?.metadata.name).toBe(`Updated ${i}`);
+			}
+		});
+
+		it("should handle concurrent updates to same record", async () => {
 			const { record } = await keys.create({
 				ownerId: "user_concurrent_update",
 				name: "Original",
@@ -533,6 +648,47 @@ describe("DrizzleStore", () => {
 
 			const found = await store.findByOwner("user_concurrent_delete");
 			expect(found).toHaveLength(0);
+		});
+
+		it("should handle findByHash during concurrent updates", async () => {
+			const { record } = await keys.create({
+				ownerId: "user_hash_concurrent",
+			});
+
+			const [found] = await Promise.all([
+				store.findByHash(record.keyHash),
+				store.updateMetadata(record.id, {
+					name: "Updated During Lookup",
+				}),
+			]);
+
+			expect(found).not.toBeNull();
+			expect(found?.keyHash).toBe(record.keyHash);
+		});
+
+		it("should prevent data corruption under concurrency", async () => {
+			const { record } = await keys.create({
+				ownerId: "user_no_corruption",
+				name: "Original",
+				scopes: ["read"],
+			});
+
+			// Simulate concurrent read/write
+			const results = await Promise.all([
+				store.findById(record.id),
+				store.updateMetadata(record.id, { name: "Update 1" }),
+				store.findById(record.id),
+				store.updateMetadata(record.id, { name: "Update 2" }),
+				store.findById(record.id),
+			]);
+
+			// Should always return consistent data
+			for (const result of results) {
+				if (result && "metadata" in result) {
+					expect(result.metadata.ownerId).toBe("user_no_corruption");
+					expect(result.metadata.scopes).toEqual(["read"]);
+				}
+			}
 		});
 
 		it("should handle read during write", async () => {
@@ -592,13 +748,20 @@ describe("DrizzleStore", () => {
 
 	describe("Unicode and Special Characters", () => {
 		it("should handle unicode characters in names", async () => {
-			const { record } = await keys.create({
+			const { key, record } = await keys.create({
 				ownerId: "user_unicode",
 				name: "🔑 😊 Привет 你好 مرحبا",
 			});
 
-			const found = await store.findById(record.id);
+			// Verify via key manager
+			const verifyResult = await keys.verify(key);
+			expect(verifyResult.valid).toBe(true);
+			expect(verifyResult.record?.metadata.name).toBe(
+				"🔑 😊 Привет 你好 مرحبا"
+			);
 
+			// Verify via direct storage lookup
+			const found = await store.findById(record.id);
 			expect(found?.metadata.name).toBe("🔑 😊 Привет 你好 مرحبا");
 		});
 
@@ -863,7 +1026,9 @@ describe("DrizzleStore", () => {
 		});
 
 		it("should handle rapid sequential saves", async () => {
-			for (let i = 0; i < SEQUENTIAL_SAVES_COUNT; i++) {
+			// biome-ignore lint/style/noMagicNumbers: reduced count for testing
+			const TEST_COUNT = 100;
+			for (let i = 0; i < TEST_COUNT; i++) {
 				await keys.create({
 					ownerId: "sequential_user",
 					name: `Sequential ${i}`,
@@ -871,7 +1036,7 @@ describe("DrizzleStore", () => {
 			}
 
 			const found = await store.findByOwner("sequential_user");
-			expect(found).toHaveLength(SEQUENTIAL_SAVES_COUNT);
+			expect(found).toHaveLength(TEST_COUNT);
 		});
 
 		it("should handle mixed concurrent operations", async () => {

@@ -1,80 +1,94 @@
 import { beforeEach, describe, expect, it } from "vitest";
+import { createKeys } from "../manager";
 import type { ApiKeyRecord } from "../types/api-key-types";
 import { MemoryStore } from "./memory";
 
 describe("MemoryStore", () => {
 	let store: MemoryStore;
+	let keys: ReturnType<typeof createKeys>;
 
 	beforeEach(() => {
 		store = new MemoryStore();
+		keys = createKeys({
+			prefix: "sk_test_",
+			length: 32,
+			algorithm: "sha256",
+			storage: store,
+		});
 	});
 
 	describe("save", () => {
 		it("should save a record", async () => {
-			const record: ApiKeyRecord = {
-				id: "test-id",
-				keyHash: "hash123",
+			const { key, record } = await keys.create({
+				ownerId: "user_123",
+				name: "Test Key",
+			});
+
+			const found = await store.findById(record.id);
+			expect(found).not.toBeNull();
+			expect(found?.id).toBe(record.id);
+			expect(found?.keyHash).toBe(record.keyHash);
+			expect(found?.metadata.ownerId).toBe("user_123");
+
+			// Verify we can verify the key
+			const verifyResult = await keys.verify(key);
+			expect(verifyResult.valid).toBe(true);
+		});
+
+		it("should throw error when saving duplicate ID", async () => {
+			const { record: record1 } = await keys.create({
+				ownerId: "user_123",
+			});
+
+			const record2: ApiKeyRecord = {
+				id: record1.id,
+				keyHash: keys.hashKey(keys.generateKey()),
 				metadata: {
-					ownerId: "user_123",
+					ownerId: "user_456",
 				},
 			};
 
-			await store.save(record);
-			const found = await store.findById("test-id");
-			expect(found).toEqual(record);
-		});
+			await expect(store.save(record2)).rejects.toThrow(
+				`API key with id ${record1.id} already exists`
+			);
 
-		it("should overwrite existing record", async () => {
-			const record1: ApiKeyRecord = {
-				id: "test-id",
-				keyHash: "hash123",
-				metadata: { ownerId: "user_123" },
-			};
-
-			const record2: ApiKeyRecord = {
-				id: "test-id",
-				keyHash: "hash456",
-				metadata: { ownerId: "user_456" },
-			};
-
-			await store.save(record1);
-			await store.save(record2);
-
-			const found = await store.findById("test-id");
-			expect(found).toEqual(record2);
+			// Original record should remain unchanged
+			const found = await store.findById(record1.id);
+			expect(found?.metadata.ownerId).toBe("user_123");
 		});
 	});
 
 	describe("findByHash", () => {
 		it("should find a record by hash", async () => {
-			const record: ApiKeyRecord = {
-				id: "test-id",
-				keyHash: "hash123",
-				metadata: { ownerId: "user_123" },
-			};
+			const { record } = await keys.create({
+				ownerId: "user_456",
+				name: "Found Key",
+			});
 
-			await store.save(record);
-			const found = await store.findByHash("hash123");
-			expect(found).toEqual(record);
+			const found = await store.findByHash(record.keyHash);
+			expect(found).not.toBeNull();
+			expect(found?.keyHash).toBe(record.keyHash);
+			expect(found?.metadata.ownerId).toBe("user_456");
+			expect(found?.metadata.name).toBe("Found Key");
 		});
 
 		it("should return null for non-existent hash", async () => {
-			const found = await store.findByHash("non-existent");
+			const found = await store.findByHash("nonexistent_hash");
 			expect(found).toBeNull();
 		});
 	});
 
 	describe("findById", () => {
 		it("should find a record by ID", async () => {
-			const record: ApiKeyRecord = {
-				id: "test-id",
-				keyHash: "hash123",
-				metadata: { ownerId: "user_123" },
-			};
+			const { record } = await keys.create({
+				ownerId: "user_789",
+				name: "By ID Key",
+			});
 
-			await store.save(record);
-			const found = await store.findById("test-id");
-			expect(found).toEqual(record);
+			const found = await store.findById(record.id);
+			expect(found).not.toBeNull();
+			expect(found?.id).toBe(record.id);
+			expect(found?.metadata.name).toBe("By ID Key");
 		});
 
 		it("should return null for non-existent ID", async () => {
@@ -85,32 +99,29 @@ describe("MemoryStore", () => {
 
 	describe("findByOwner", () => {
 		it("should find all records for an owner", async () => {
-			const record1: ApiKeyRecord = {
-				id: "id1",
-				keyHash: "hash1",
-				metadata: { ownerId: "user_123" },
-			};
+			const ownerId = "user_123";
 
-			const record2: ApiKeyRecord = {
-				id: "id2",
-				keyHash: "hash2",
-				metadata: { ownerId: "user_123" },
-			};
+			await keys.create({
+				ownerId,
+				scopes: ["read"],
+			});
 
-			const record3: ApiKeyRecord = {
-				id: "id3",
-				keyHash: "hash3",
-				metadata: { ownerId: "user_456" },
-			};
+			await keys.create({
+				ownerId,
+				scopes: ["write"],
+			});
 
-			await store.save(record1);
-			await store.save(record2);
-			await store.save(record3);
+			await keys.create({
+				ownerId: "user_456",
+				scopes: ["admin"],
+			});
 
-			const found = await store.findByOwner("user_123");
-			expect(found.length).toBe(2);
-			expect(found).toContainEqual(record1);
-			expect(found).toContainEqual(record2);
+			const found = await store.findByOwner(ownerId);
+			expect(found).toHaveLength(2);
+			expect(found.some((r) => r.metadata.scopes?.includes("read"))).toBe(true);
+			expect(found.some((r) => r.metadata.scopes?.includes("write"))).toBe(
+				true
+			);
 		});
 
 		it("should return empty array for non-existent owner", async () => {
@@ -121,18 +132,37 @@ describe("MemoryStore", () => {
 
 	describe("updateMetadata", () => {
 		it("should update metadata for a record", async () => {
-			const record: ApiKeyRecord = {
-				id: "test-id",
-				keyHash: "hash123",
-				metadata: { ownerId: "user_123", name: "Old Name" },
-			};
+			const { record } = await keys.create({
+				ownerId: "user_update",
+				name: "Original Name",
+				scopes: ["read"],
+			});
 
-			await store.save(record);
-			await store.updateMetadata("test-id", { name: "New Name" });
+			await store.updateMetadata(record.id, {
+				name: "Updated Name",
+				scopes: ["admin", "write"],
+			});
 
-			const found = await store.findById("test-id");
-			expect(found?.metadata.name).toBe("New Name");
-			expect(found?.metadata.ownerId).toBe("user_123");
+			const updated = await store.findById(record.id);
+			expect(updated?.metadata.name).toBe("Updated Name");
+			expect(updated?.metadata.scopes).toEqual(["admin", "write"]);
+		});
+
+		it("should merge updates with existing metadata", async () => {
+			const { record } = await keys.create({
+				ownerId: "user_merge",
+				name: "Original Name",
+				scopes: ["read"],
+			});
+
+			await store.updateMetadata(record.id, {
+				description: "New description",
+			});
+
+			const updated = await store.findById(record.id);
+			expect(updated?.metadata.description).toBe("New description");
+			expect(updated?.metadata.name).toBe("Original Name");
+			expect(updated?.metadata.scopes).toEqual(["read"]);
 		});
 
 		it("should throw error for non-existent ID", async () => {
@@ -144,30 +174,25 @@ describe("MemoryStore", () => {
 
 	describe("delete", () => {
 		it("should delete a record", async () => {
-			const record: ApiKeyRecord = {
-				id: "test-id",
-				keyHash: "hash123",
-				metadata: { ownerId: "user_123" },
-			};
+			const { record } = await keys.create({
+				ownerId: "user_delete",
+				name: "To Delete",
+			});
 
-			await store.save(record);
-			await store.delete("test-id");
+			await store.delete(record.id);
 
-			const found = await store.findById("test-id");
+			const found = await store.findById(record.id);
 			expect(found).toBeNull();
 		});
 
 		it("should remove hash index when deleting", async () => {
-			const record: ApiKeyRecord = {
-				id: "test-id",
-				keyHash: "hash123",
-				metadata: { ownerId: "user_123" },
-			};
+			const { record } = await keys.create({
+				ownerId: "user_hash_delete",
+			});
 
-			await store.save(record);
-			await store.delete("test-id");
+			await store.delete(record.id);
 
-			const found = await store.findByHash("hash123");
+			const found = await store.findByHash(record.keyHash);
 			expect(found).toBeNull();
 		});
 
@@ -179,35 +204,17 @@ describe("MemoryStore", () => {
 
 	describe("deleteByOwner", () => {
 		it("should delete all records for an owner", async () => {
-			const record1: ApiKeyRecord = {
-				id: "id1",
-				keyHash: "hash1",
-				metadata: { ownerId: "user_123" },
-			};
+			await keys.create({ ownerId: "user_delete" });
+			await keys.create({ ownerId: "user_delete" });
+			await keys.create({ ownerId: "user_keep" });
 
-			const record2: ApiKeyRecord = {
-				id: "id2",
-				keyHash: "hash2",
-				metadata: { ownerId: "user_123" },
-			};
+			await store.deleteByOwner("user_delete");
 
-			const record3: ApiKeyRecord = {
-				id: "id3",
-				keyHash: "hash3",
-				metadata: { ownerId: "user_456" },
-			};
+			const userDeleteKeys = await store.findByOwner("user_delete");
+			const userKeepKeys = await store.findByOwner("user_keep");
 
-			await store.save(record1);
-			await store.save(record2);
-			await store.save(record3);
-
-			await store.deleteByOwner("user_123");
-
-			const found123 = await store.findByOwner("user_123");
-			const found456 = await store.findByOwner("user_456");
-
-			expect(found123.length).toBe(0);
-			expect(found456.length).toBe(1);
+			expect(userDeleteKeys).toHaveLength(0);
+			expect(userKeepKeys).toHaveLength(1);
 		});
 
 		it("should do nothing for non-existent owner", async () => {

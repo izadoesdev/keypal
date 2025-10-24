@@ -10,7 +10,7 @@ This document outlines all features that must be implemented and tested for each
   - Saves all metadata fields correctly
   - Handles concurrent saves
   - Returns without errors on success
-  - Overwrites existing record with same ID
+  - Throws error if record with same ID already exists
   - Preserves record integrity after save
 
 - [ ] **findByHash()** - Lookup by key hash

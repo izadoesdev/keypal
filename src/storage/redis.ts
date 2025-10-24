@@ -24,6 +24,11 @@ export class RedisStore implements Storage {
 	}
 
 	async save(record: ApiKeyRecord): Promise<void> {
+		const existing = await this.findById(record.id);
+		if (existing) {
+			throw new Error(`API key with id ${record.id} already exists`);
+		}
+
 		const pipeline = this.redis.pipeline();
 		pipeline.set(this.key(record.id), JSON.stringify(record));
 		pipeline.set(this.hashKey(record.keyHash), record.id);

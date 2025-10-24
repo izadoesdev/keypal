@@ -5,7 +5,11 @@ export class MemoryStore implements Storage {
 	private readonly keys: Map<string, ApiKeyRecord> = new Map();
 
 	async save(record: ApiKeyRecord): Promise<void> {
-		await this.keys.set(record.id, record);
+		const existing = await this.keys.get(record.id);
+		if (existing) {
+			throw new Error(`API key with id ${record.id} already exists`);
+		}
+		this.keys.set(record.id, record);
 	}
 
 	async findByHash(keyHash: string): Promise<ApiKeyRecord | null> {

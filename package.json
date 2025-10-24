@@ -69,6 +69,7 @@
     "redis:up": "docker-compose up -d",
     "redis:down": "docker-compose down",
     "redis:logs": "docker-compose logs -f redis",
+    "prepare": "husky",
     "prepublishOnly": "bun run build"
   },
   "devDependencies": {
@@ -80,6 +81,7 @@
     "@vitest/ui": "^4.0.3",
     "better-sqlite3": "^12.4.1",
     "hono": "^4.10.2",
+    "husky": "^9.1.7",
     "lint-staged": "^16.2.6",
     "mitata": "^1.0.34",
     "pg": "^8.16.3",

@@ -1,72 +1,72 @@
 name: Test
 
 on:
-    push:
-        branches: [main]
-    pull_request:
-        branches: [main]
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
 
 jobs:
-    test:
-        name: Test
-        runs-on: ubuntu-latest
+  test:
+    name: Test
+    runs-on: ubuntu-latest
 
-        services:
-            redis:
-                image: redis:7-alpine
-                ports:
-                    - 6379:6379
-                options: >-
-                    --health-cmd "redis-cli ping"
-                    --health-interval 10s
-                    --health-timeout 5s
-                    --health-retries 5
+    services:
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
 
-        steps:
-            - name: Checkout code
-              uses: actions/checkout@v4
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-            - name: Setup Bun
-              uses: oven-sh/setup-bun@v2
-              with:
-                  bun-version: latest
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
 
-            - name: Install dependencies
-              run: bun install
+      - name: Install dependencies
+        run: bun install
 
-            - name: Run tests
-              run: bun run test:run
+      - name: Run tests
+        run: bun run test
 
-            - name: Run Redis tests
-              run: bun run test:redis
-              env:
-                  REDIS_URL: redis://localhost:6379
+      - name: Run Redis tests
+        run: bun run test:redis
+        env:
+          REDIS_URL: redis://localhost:6379
 
-            - name: Run Drizzle tests
-              run: bun run test:drizzle
+      - name: Run Drizzle tests
+        run: bun run test:drizzle
 
-    build:
-        name: Build
-        runs-on: ubuntu-latest
+  build:
+    name: Build
+    runs-on: ubuntu-latest
 
-        steps:
-            - name: Checkout code
-              uses: actions/checkout@v4
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-            - name: Setup Bun
-              uses: oven-sh/setup-bun@v2
-              with:
-                  bun-version: latest
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
 
-            - name: Install dependencies
-              run: bun install
+      - name: Install dependencies
+        run: bun install
 
-            - name: Build
-              run: bun run build
+      - name: Build
+        run: bun run build
 
-            - name: Check build artifacts
-              run: |
-                  ls -lh dist/
-                  test -f dist/index.cjs
-                  test -f dist/index.mjs
-                  test -f dist/index.d.ts
+      - name: Check build artifacts
+        run: |
+          ls -lh dist/
+          test -f dist/index.cjs
+          test -f dist/index.mjs
+          test -f dist/index.d.ts

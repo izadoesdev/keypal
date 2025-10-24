@@ -59,16 +59,13 @@
   ],
   "scripts": {
     "build": "unbuild",
-    "test": "vitest",
+    "test:run": "vitest",
     "test:ui": "vitest --ui",
     "test:coverage": "vitest --coverage",
     "test:redis": "vitest run src/storage/redis.test.ts",
     "test:drizzle": "vitest run src/storage/drizzle.test.ts",
     "bench": "bun run benchmark.ts",
     "example:hono": "bun run examples/hono-api.ts",
-    "redis:up": "docker-compose up -d",
-    "redis:down": "docker-compose down",
-    "redis:logs": "docker-compose logs -f redis",
     "prepare": "husky",
     "prepublishOnly": "bun run build"
   },

@@ -66,6 +66,10 @@
     "test:drizzle": "vitest run src/storage/drizzle.test.ts",
     "bench": "bun run benchmark.ts",
     "example:hono": "bun run examples/hono-api.ts",
+    "studio": "bunx drizzle-kit studio",
+    "db:generate": "bunx drizzle-kit generate",
+    "db:migrate": "bunx drizzle-kit migrate",
+    "db:push": "bunx drizzle-kit push",
     "prepare": "husky",
     "prepublishOnly": "bun run build"
   },
@@ -92,7 +96,8 @@
   },
   "optionalDependencies": {
     "ioredis": "^5.8.2",
-    "drizzle-orm": "^0.44.6"
+    "drizzle-orm": "^0.44.6",
+    "drizzle-kit": "^0.31.0"
   },
   "dependencies": {
     "nanoid": "^5.1.6",

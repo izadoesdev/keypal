@@ -1,32 +1,36 @@
-import {
-	boolean,
-	index,
-	jsonb,
-	pgTable,
-	text,
-	timestamp,
-} from "drizzle-orm/pg-core";
+import { drizzle } from "drizzle-orm/node-postgres";
+import { Pool } from "pg";
+import { apikey } from "../src/drizzle/schema";
+import { createKeys } from "../src/manager";
+import { DrizzleStore } from "../src/storage/drizzle";
 
-export const apikey = pgTable(
-	"apikey",
-	{
-		id: text().primaryKey().notNull(),
-		keyHash: text("key_hash").notNull(),
-		ownerId: text("owner_id").notNull(),
-		name: text("name"),
-		description: text("description"),
-		scopes: jsonb("scopes").default([]),
-		resources: jsonb("resources").default({}),
-		enabled: boolean("enabled").notNull().default(true),
-		revokedAt: timestamp("revoked_at", { mode: "string" }),
-		rotatedTo: text("rotated_to"),
-		expiresAt: timestamp("expires_at", { mode: "string" }),
-		createdAt: timestamp("created_at", { mode: "string" }).notNull(),
-		lastUsedAt: timestamp("last_used_at", { mode: "string" }),
-	},
-	(table) => [
-		index("apikey_key_hash_idx").on(table.keyHash),
-		index("apikey_owner_id_idx").on(table.ownerId),
-		index("apikey_enabled_idx").on(table.enabled),
-	]
-);
+const pool = new Pool({
+	connectionString:
+		process.env.DATABASE_URL ||
+		"postgresql://keypal:keypal_dev@localhost:5432/keypal",
+});
+
+const db = drizzle(pool, { schema: { apikey } });
+
+export const keys = createKeys({
+	prefix: "sk_live_",
+	storage: new DrizzleStore({ db, table: apikey }),
+	cache: true,
+});
+
+export async function createApiKey(ownerId: string, name?: string) {
+	return await keys.create({
+		ownerId,
+		name,
+		scopes: ["read", "write"],
+	});
+}
+
+export async function verifyApiKey(authHeader: string | null) {
+	if (!authHeader) {
+		return null;
+	}
+
+	const key = await keys.verify(authHeader);
+	return key;
+}

@@ -59,36 +59,6 @@ export type DrizzleColumnMapping = {
 	/** Column name for the hashed key (default: 'keyHash') */
 	keyHash?: string;
 
-	/** Column name for the owner ID (default: 'ownerId') */
-	ownerId?: string;
-
-	/** Column name for the key name (default: 'name') */
-	name?: string;
-
-	/** Column name for the description (default: 'description') */
-	description?: string;
-
-	/** Column name for scopes (default: 'scopes') */
-	scopes?: string;
-
-	/** Column name for resources (default: 'resources') */
-	resources?: string;
-
-	/** Column name for expiration date (default: 'expiresAt') */
-	expiresAt?: string;
-
-	/** Column name for creation date (default: 'createdAt') */
-	createdAt?: string;
-
-	/** Column name for last used date (default: 'lastUsedAt') */
-	lastUsedAt?: string;
-
-	/** Column name for enabled status (default: 'enabled') */
-	enabled?: string;
-
-	/** Column name for revoked date (default: 'revokedAt') */
-	revokedAt?: string;
-
-	/** Column name for rotated to key ID (default: 'rotatedTo') */
-	rotatedTo?: string;
+	/** Column name for the metadata JSONB (default: 'metadata') */
+	metadata?: string;
 };

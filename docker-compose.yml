@@ -1,4 +1,21 @@
 services:
+  postgres:
+    image: postgres:18-alpine
+    container_name: keypal-postgres
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: keypal
+      POSTGRES_PASSWORD: keypal_dev
+      POSTGRES_DB: keypal
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U keypal"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
   redis:
     image: redis:7-alpine
     container_name: keypal-redis
@@ -14,4 +31,5 @@ services:
       retries: 5
 
 volumes:
+  postgres-data:
   redis-data:

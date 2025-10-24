@@ -73,13 +73,15 @@ export class RedisStore implements Storage {
 		metadata: Partial<ApiKeyMetadata>
 	): Promise<void> {
 		const record = await this.findById(id);
-		if (record) {
-			record.metadata = { ...record.metadata, ...metadata };
-			await this.redis.set(this.key(id), JSON.stringify(record));
+		if (!record) {
+			throw new Error(`API key with id ${id} not found`);
+		}
 
-			if (metadata.revokedAt) {
-				await this.redis.del(this.hashKey(record.keyHash));
-			}
+		record.metadata = { ...record.metadata, ...metadata };
+		await this.redis.set(this.key(id), JSON.stringify(record));
+
+		if (metadata.revokedAt) {
+			await this.redis.del(this.hashKey(record.keyHash));
 		}
 	}
 

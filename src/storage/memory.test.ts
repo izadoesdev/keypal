@@ -135,9 +135,10 @@ describe("MemoryStore", () => {
 			expect(found?.metadata.ownerId).toBe("user_123");
 		});
 
-		it("should do nothing for non-existent ID", async () => {
-			await store.updateMetadata("non-existent", { name: "New Name" });
-			// Should not throw
+		it("should throw error for non-existent ID", async () => {
+			await expect(
+				store.updateMetadata("non-existent", { name: "New Name" })
+			).rejects.toThrow("API key with id non-existent not found");
 		});
 	});
 

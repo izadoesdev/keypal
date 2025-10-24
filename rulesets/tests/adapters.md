@@ -10,6 +10,8 @@ This document outlines all features that must be implemented and tested for each
   - Saves all metadata fields correctly
   - Handles concurrent saves
   - Returns without errors on success
+  - Overwrites existing record with same ID
+  - Preserves record integrity after save
 
 - [ ] **findByHash()** - Lookup by key hash
   - Returns correct record when exists
@@ -34,16 +36,21 @@ This document outlines all features that must be implemented and tested for each
   - Preserves unchanged fields
   - Throws error if key not found
   - Atomically updates entire metadata object
+  - Multiple updates to same key work correctly
 
 - [ ] **delete()** - Single record deletion
   - Removes record from storage
   - No error if already deleted
   - Does not affect other records
+  - Removes record from hash index (findByHash returns null after delete)
+  - Idempotent operation (multiple deletes don't error)
 
 - [ ] **deleteByOwner()** - Bulk deletion by owner
   - Deletes all keys for given owner
   - Does not delete keys from other owners
   - Returns without error when none exist
+  - Removes all hash indexes for deleted keys
+  - Idempotent operation (multiple calls don't error)
 
 ## Metadata Field Support
 
@@ -178,10 +185,14 @@ This document outlines all features that must be implemented and tested for each
 
 ### Concurrent Operations
 
-- [ ] Concurrent saves
-- [ ] Concurrent updates
-- [ ] Concurrent deletes
-- [ ] Read during write
+- [ ] Concurrent saves to different records
+- [ ] Concurrent saves to same record (last write wins)
+- [ ] Concurrent updates to different records
+- [ ] Concurrent updates to same record
+- [ ] Concurrent deletes don't conflict
+- [ ] Read during write operations
+- [ ] findByHash during concurrent saves
+- [ ] No data corruption under concurrency
 
 ### Error Handling
 
@@ -300,11 +311,11 @@ This document outlines all features that must be implemented and tested for each
 
 ## Checklist Summary
 
-Total features: **87**
-- Core Storage: 7 operations
+Total features: **97**
+- Core Storage: 7 operations (+5 sub-requirements)
 - Metadata Fields: 11 fields with various scenarios
 - Data Types: 8 type handling scenarios
-- Edge Cases: 10 edge case categories
+- Edge Cases: 10 edge case categories (+4 concurrency items)
 - Query Operations: 6 query patterns
 - Performance: 7 performance characteristics
 - Integration: 7 integration points

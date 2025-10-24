@@ -32,9 +32,10 @@ export class MemoryStore implements Storage {
 		metadata: Partial<ApiKeyMetadata>
 	): Promise<void> {
 		const record = await this.keys.get(id);
-		if (record) {
-			record.metadata = { ...record.metadata, ...metadata };
+		if (!record) {
+			throw new Error(`API key with id ${id} not found`);
 		}
+		record.metadata = { ...record.metadata, ...metadata };
 	}
 
 	async delete(id: string): Promise<void> {

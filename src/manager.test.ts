@@ -1046,17 +1046,14 @@ describe("ApiKeyManager - Additional Operations", () => {
 			const pastDate = new Date();
 			pastDate.setFullYear(pastDate.getFullYear() - 1);
 
-			const { key } = await keysWithCache.create({
+			const { key, record } = await keysWithCache.create({
 				ownerId: "user_1",
 				expiresAt: pastDate.toISOString(),
 			});
 
 			const keyHash = keysWithCache.hashKey(key);
-			await cache.set(
-				`apikey:${keyHash}`,
-				JSON.stringify({ test: "data" }),
-				60
-			);
+			// Put expired record in cache
+			await cache.set(`apikey:${keyHash}`, JSON.stringify(record), 60);
 
 			const result = await keysWithCache.verify(key);
 			expect(result.valid).toBe(false);

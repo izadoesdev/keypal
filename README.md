@@ -205,19 +205,56 @@ const keys = createKeys({
 ### Drizzle ORM
 
 ```typescript
+import { drizzle } from 'drizzle-orm/node-postgres'
+import { Pool } from 'pg'
+import { apikey } from 'keypal/drizzle/schema'
 import { DrizzleStore } from 'keypal/storage/drizzle'
+import { createKeys } from 'keypal'
+
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL
+})
+
+const db = drizzle(pool, { schema: { apikey } })
 
 const keys = createKeys({
-  prefix: 'sk_',
-  storage: new DrizzleStore({
-    db,
-    table: apiKeys,
-    columns: {
-      keyHash: 'key_hash',
-      ownerId: 'user_id',
-    }
-  })
+  prefix: 'sk_prod_',
+  storage: new DrizzleStore({ db, table: apikey }),
+  cache: true,
 })
+```
+
+**Setup Database Schema:**
+
+```typescript
+// src/drizzle/schema.ts
+import { index, jsonb, pgTable, text, unique } from 'drizzle-orm/pg-core'
+
+export const apikey = pgTable(
+  'apikey',
+  {
+    id: text().primaryKey().notNull(),
+    keyHash: text('key_hash').notNull(),
+    metadata: jsonb('metadata').notNull(),
+  },
+  (table) => [
+    index('apikey_key_hash_idx').on(table.keyHash),
+    unique('apikey_key_hash_unique').on(table.keyHash),
+  ]
+)
+```
+
+**Generate migrations:**
+
+```bash
+bun run db:generate
+bun run db:push
+```
+
+**Use Drizzle Studio:**
+
+```bash
+bun run studio
 ```
 
 ### Custom Storage

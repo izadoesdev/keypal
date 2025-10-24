@@ -75,8 +75,9 @@
     "@biomejs/biome": "2.2.6",
     "@hono/node-server": "^1.19.5",
     "@types/bun": "latest",
-    "@vitest/coverage-v8": "4.0.1",
-    "@vitest/ui": "^4.0.1",
+    "@types/pg": "^8.15.5",
+    "@vitest/coverage-v8": "^4.0.3",
+    "@vitest/ui": "^4.0.3",
     "better-sqlite3": "^12.4.1",
     "hono": "^4.10.2",
     "lint-staged": "^16.2.6",
@@ -85,7 +86,7 @@
     "ultracite": "5.6.4",
     "unbuild": "^3.6.1",
     "undici": "^7.16.0",
-    "vitest": "^4.0.1"
+    "vitest": "^4.0.3"
   },
   "peerDependencies": {
     "typescript": "^5"
@@ -95,7 +96,6 @@
     "drizzle-orm": "^0.44.6"
   },
   "dependencies": {
-    "@types/pg": "^8.15.5",
     "nanoid": "^5.1.6",
     "typebox": "^1.0.43"
   },

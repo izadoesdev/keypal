@@ -1,6 +1,9 @@
 {
   "$schema": "./node_modules/@biomejs/biome/configuration_schema.json",
-  "extends": [
-    "ultracite"
-  ]
+  "extends": ["ultracite"],
+  "formatter": {
+    "enabled": true,
+    "indentWidth": 2,
+    "indentStyle": "tab"
+  }
 }

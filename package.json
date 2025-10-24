@@ -59,7 +59,7 @@
   ],
   "scripts": {
     "build": "unbuild",
-    "test:run": "vitest",
+    "test": "vitest",
     "test:ui": "vitest --ui",
     "test:coverage": "vitest --coverage",
     "test:redis": "vitest run src/storage/redis.test.ts",

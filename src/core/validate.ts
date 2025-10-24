@@ -1,19 +1,16 @@
-import { timingSafeEqual } from 'node:crypto'
-import { hashKey, type HashKeyOptions } from './hash'
+import { timingSafeEqual } from "node:crypto";
+import { type HashKeyOptions, hashKey } from "./hash";
 
 export function validateKey(
-    key: string,
-    storedHash: string,
-    options: HashKeyOptions = {}
+  key: string,
+  storedHash: string,
+  options: HashKeyOptions = {}
 ): boolean {
-    const computedHash = hashKey(key, options)
+  const computedHash = hashKey(key, options);
 
-    if (computedHash.length !== storedHash.length) {
-        return false
-    }
+  if (computedHash.length !== storedHash.length) {
+    return false;
+  }
 
-    return timingSafeEqual(
-        Buffer.from(computedHash),
-        Buffer.from(storedHash)
-    )
+  return timingSafeEqual(Buffer.from(computedHash), Buffer.from(storedHash));
 }

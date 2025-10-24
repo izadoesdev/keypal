@@ -705,6 +705,138 @@ describe("DrizzleStore", () => {
 		});
 	});
 
+	describe("Key Rotation", () => {
+		it("should rotate a key and mark old key as revoked", async () => {
+			const { key: oldKey, record: oldRecord } = await keys.create({
+				ownerId: "user_rotate",
+				name: "Old Key",
+				scopes: ["read"],
+			});
+
+			const {
+				key: newKey,
+				record: newRecord,
+				oldRecord: rotatedOldRecord,
+			} = await keys.rotate(oldRecord.id, {
+				name: "New Key",
+				scopes: ["read", "write"],
+			});
+
+			expect(newKey).toBeDefined();
+			expect(newKey).not.toBe(oldKey);
+			expect(newRecord.metadata.name).toBe("New Key");
+			expect(newRecord.metadata.scopes).toEqual(["read", "write"]);
+			expect(rotatedOldRecord.id).toBe(oldRecord.id);
+
+			// Old key should be revoked
+			const oldResult = await keys.verify(oldKey);
+			expect(oldResult.valid).toBe(false);
+			expect(oldResult.error).toBe("API key has been revoked");
+
+			// New key should work
+			const newResult = await keys.verify(newKey);
+			expect(newResult.valid).toBe(true);
+
+			// Old record should have rotatedTo reference
+			const oldRecordFound = await store.findById(oldRecord.id);
+			expect(oldRecordFound?.metadata.rotatedTo).toBe(newRecord.id);
+			expect(oldRecordFound?.metadata.revokedAt).toBeDefined();
+		});
+
+		it("should preserve metadata when rotating without updates", async () => {
+			const { record: oldRecord } = await keys.create({
+				ownerId: "user_rotate_preserve",
+				name: "Original Key",
+				scopes: ["read", "write"],
+				description: "Original description",
+			});
+
+			const { record: newRecord } = await keys.rotate(oldRecord.id);
+
+			expect(newRecord.metadata.name).toBe("Original Key");
+			expect(newRecord.metadata.scopes).toEqual(["read", "write"]);
+			expect(newRecord.metadata.description).toBe("Original description");
+		});
+
+		it("should throw error when rotating non-existent key", async () => {
+			await expect(keys.rotate("nonexistent")).rejects.toThrow(
+				"API key not found"
+			);
+		});
+	});
+
+	describe("Key Revocation", () => {
+		it("should revoke a key and mark it as revoked", async () => {
+			const { key, record } = await keys.create({
+				ownerId: "user_revoke",
+				name: "To Revoke",
+			});
+
+			await keys.revoke(record.id);
+
+			const verifyResult = await keys.verify(key);
+			expect(verifyResult.valid).toBe(false);
+			expect(verifyResult.error).toBe("API key has been revoked");
+
+			const found = await store.findById(record.id);
+			expect(found?.metadata.revokedAt).toBeDefined();
+		});
+
+		it("should revoke all keys for an owner", async () => {
+			const ownerId = "user_revoke_all";
+
+			const { key: key1 } = await keys.create({ ownerId });
+			const { key: key2 } = await keys.create({ ownerId });
+			await keys.create({ ownerId: "user_keep" });
+
+			await keys.revokeAll(ownerId);
+
+			const result1 = await keys.verify(key1);
+			const result2 = await keys.verify(key2);
+			expect(result1.valid).toBe(false);
+			expect(result2.valid).toBe(false);
+
+			const remaining = await store.findByOwner(ownerId);
+			for (const record of remaining) {
+				expect(record.metadata.revokedAt).toBeDefined();
+			}
+		});
+	});
+
+	describe("Key Enable/Disable", () => {
+		it("should disable a key", async () => {
+			const { key, record } = await keys.create({
+				ownerId: "user_disable",
+				name: "To Disable",
+			});
+
+			await keys.disable(record.id);
+
+			const verifyResult = await keys.verify(key);
+			expect(verifyResult.valid).toBe(false);
+			expect(verifyResult.error).toBe("API key is disabled");
+
+			const found = await store.findById(record.id);
+			expect(found?.metadata.enabled).toBe(false);
+		});
+
+		it("should enable a disabled key", async () => {
+			const { key, record } = await keys.create({
+				ownerId: "user_enable",
+				name: "To Enable",
+				enabled: false,
+			});
+
+			await keys.enable(record.id);
+
+			const verifyResult = await keys.verify(key);
+			expect(verifyResult.valid).toBe(true);
+
+			const found = await store.findById(record.id);
+			expect(found?.metadata.enabled).toBe(true);
+		});
+	});
+
 	describe("Stress Tests", () => {
 		it("should handle concurrent saves efficiently", async () => {
 			const startTime = Date.now();

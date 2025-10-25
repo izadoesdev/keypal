@@ -57,7 +57,7 @@ export class DrizzleStore implements Storage {
 			.where(eq(this.table.keyHash, keyHash))
 			.limit(1);
 
-		return rows.length > 0 ? this.toRecord(rows[0]) : null;
+		return rows.length > 0 && rows[0] ? this.toRecord(rows[0]) : null;
 	}
 
 	async findById(id: string): Promise<ApiKeyRecord | null> {
@@ -67,7 +67,7 @@ export class DrizzleStore implements Storage {
 			.where(eq(this.table.id, id))
 			.limit(1);
 
-		return rows.length > 0 ? this.toRecord(rows[0]) : null;
+		return rows.length > 0 && rows[0] ? this.toRecord(rows[0]) : null;
 	}
 
 	async findByOwner(ownerId: string): Promise<ApiKeyRecord[]> {

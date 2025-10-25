@@ -102,6 +102,10 @@ export class DrizzleStore implements Storage {
 			conditions.push(arrayContains(this.table.metadata, { ownerId }));
 		}
 
+		if (conditions.length === 0) {
+			return [];
+		}
+
 		const rows = await this.db
 			.select()
 			.from(this.table)

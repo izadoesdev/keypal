@@ -23,5 +23,6 @@ export default defineBuildConfig({
 		"drizzle-orm/pg-core",
 		"drizzle-orm/node-postgres",
 		"@prisma/client",
+		"ioredis",
 	],
 });

@@ -608,7 +608,11 @@ describe("DrizzleStore", () => {
 			await Promise.all(promises);
 
 			for (let i = 0; i < records.length; i++) {
-				const found = await store.findById(records[i].record.id);
+				const record = records.at(i);
+				if (!record) {
+					continue;
+				}
+				const found = await store.findById(record.record.id);
 				expect(found?.metadata.name).toBe(`Updated ${i}`);
 			}
 		});

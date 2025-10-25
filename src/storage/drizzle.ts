@@ -1,25 +1,34 @@
-import { and, arrayContains, eq, exists, type SQL, sql } from "drizzle-orm";
+import { and, arrayContains, eq, or } from "drizzle-orm";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import type { PgTable } from "drizzle-orm/pg-core";
-import type { apikey } from "../drizzle/schema";
 import type { ApiKeyMetadata, ApiKeyRecord } from "../types/api-key-types";
 import type { Storage } from "../types/storage-types";
 
 /**
  * PostgreSQL storage adapter for API keys using Drizzle ORM
  *
- * Stores API keys with the following structure:
- * - id: Primary key identifier
- * - keyHash: SHA-256 hash of the API key
- * - metadata: JSONB field containing owner, scopes, and other metadata
+ * **Required Table Columns:**
+ * - `id`: TEXT PRIMARY KEY
+ * - `keyHash`: TEXT
+ * - `metadata`: JSONB
+ *
+ * You can add custom columns - they'll be ignored by this adapter.
+ *
+ * @example
+ * ```typescript
+ * import { apikey } from 'keypal/drizzle/schema';
+ * const store = new DrizzleStore({ db, table: apikey });
+ * ```
  */
 export class DrizzleStore implements Storage {
 	private readonly db: NodePgDatabase<Record<string, PgTable>>;
-	private readonly table: typeof apikey;
+	// biome-ignore lint/suspicious/noExplicitAny: Accept any Drizzle table type
+	private readonly table: any;
 
 	constructor(options: {
 		db: NodePgDatabase<Record<string, PgTable>>;
-		table: typeof apikey;
+		// biome-ignore lint/suspicious/noExplicitAny: Accept any Drizzle table type
+		table: any;
 	}) {
 		this.db = options.db;
 		this.table = options.table;
@@ -38,7 +47,11 @@ export class DrizzleStore implements Storage {
 		};
 	}
 
-	private toRow(record: ApiKeyRecord): typeof apikey.$inferSelect {
+	private toRow(record: ApiKeyRecord): {
+		id: string;
+		keyHash: string;
+		metadata: ApiKeyMetadata;
+	} {
 		return {
 			id: record.id,
 			keyHash: record.keyHash,
@@ -80,15 +93,15 @@ export class DrizzleStore implements Storage {
 	}
 
 	async findByTags(tags: string[], ownerId?: string): Promise<ApiKeyRecord[]> {
-		const conditions: SQL[] = [];
+		// biome-ignore lint/suspicious/noExplicitAny: arrayContains returns SQL[], TypeScript incorrectly infers undefined
+		const conditions: any = [];
 
 		if (tags.length > 0) {
 			const lowercasedTags = tags.map((t) => t.toLowerCase());
-			conditions.push(
-				exists(
-					sql`(select 1 from jsonb_array_elements_text(${this.table.metadata}->'tags') as tag where tag in ${lowercasedTags})`
-				)
+			const tagConditions = lowercasedTags.map((tag) =>
+				arrayContains(this.table.metadata, { tags: [tag] })
 			);
+			conditions.push(or(...tagConditions));
 		}
 
 		if (ownerId !== undefined) {

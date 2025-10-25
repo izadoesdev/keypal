@@ -23,20 +23,57 @@ import type { PermissionScope } from "./types/permissions-types";
 import type { Storage } from "./types/storage-types";
 import { logger } from "./utils/logger";
 
+/**
+ * Result of verifying an API key
+ */
 export type VerifyResult = {
+	/** Whether the key is valid */
 	valid: boolean;
+	/** The API key record if valid */
 	record?: ApiKeyRecord;
+	/** Error message if invalid */
 	error?: string;
 };
 
+/**
+ * Options for verifying API keys
+ */
 export type VerifyOptions = {
+	/** Skip cache lookup (always query storage) */
 	skipCache?: boolean;
+	/** Override header names to look for */
 	headerNames?: string[];
+	/** Override extractBearer behavior */
 	extractBearer?: boolean;
 	/** Skip updating lastUsedAt timestamp (useful when autoTrackUsage is enabled) */
 	skipTracking?: boolean;
 };
 
+/**
+ * API Key Manager for creating, verifying, and managing API keys
+ *
+ * @example
+ * ```typescript
+ * const keys = createKeys({
+ *   prefix: "sk_live_",
+ *   storage: "redis",
+ *   redis: redisClient
+ * });
+ *
+ * // Create a key
+ * const { key, record } = await keys.create({
+ *   ownerId: "user_123",
+ *   name: "Production Key",
+ *   scopes: ["read", "write"]
+ * });
+ *
+ * // Verify a key
+ * const result = await keys.verify(key);
+ * if (result.valid) {
+ *   console.log("Key belongs to:", result.record?.metadata.ownerId);
+ * }
+ * ```
+ */
 export class ApiKeyManager {
 	private readonly config: Config;
 	private readonly storage: Storage;
@@ -124,6 +161,21 @@ export class ApiKeyManager {
 		});
 	}
 
+	/**
+	 * Extract API key from HTTP headers
+	 *
+	 * @param headers - HTTP headers object or Headers instance
+	 * @param options - Optional extraction options
+	 * @returns The extracted API key or null if not found
+	 *
+	 * @example
+	 * ```typescript
+	 * const key = keys.extractKey(req.headers);
+	 * if (key) {
+	 *   console.log("Found key:", key);
+	 * }
+	 * ```
+	 */
 	extractKey(
 		headers: Record<string, string | undefined> | Headers,
 		options?: KeyExtractionOptions
@@ -136,6 +188,20 @@ export class ApiKeyManager {
 		return extractKeyFromHeaders(headers, mergedOptions);
 	}
 
+	/**
+	 * Check if an API key is present in HTTP headers
+	 *
+	 * @param headers - HTTP headers object or Headers instance
+	 * @param options - Optional extraction options
+	 * @returns True if an API key is found in headers
+	 *
+	 * @example
+	 * ```typescript
+	 * if (keys.hasKey(req.headers)) {
+	 *   // API key is present
+	 * }
+	 * ```
+	 */
 	hasKey(
 		headers: Record<string, string | undefined> | Headers,
 		options?: KeyExtractionOptions
@@ -148,6 +214,28 @@ export class ApiKeyManager {
 		return hasApiKey(headers, mergedOptions);
 	}
 
+	/**
+	 * Verify an API key from a string or HTTP headers
+	 *
+	 * @param keyOrHeader - The API key string or HTTP headers object
+	 * @param options - Verification options
+	 * @returns Verification result with validity status and record
+	 *
+	 * @example
+	 * ```typescript
+	 * // Verify from string
+	 * const result = await keys.verify("sk_live_abc123...");
+	 *
+	 * // Verify from headers
+	 * const result = await keys.verify(req.headers);
+	 *
+	 * if (result.valid) {
+	 *   console.log("Owner:", result.record?.metadata.ownerId);
+	 * } else {
+	 *   console.log("Error:", result.error);
+	 * }
+	 * ```
+	 */
 	async verify(
 		keyOrHeader: string | Record<string, string | undefined> | Headers,
 		options: VerifyOptions = {}
@@ -264,6 +352,27 @@ export class ApiKeyManager {
 		return { valid: true, record };
 	}
 
+	/**
+	 * Create a new API key
+	 *
+	 * @param metadata - Metadata for the API key (ownerId is required)
+	 * @returns The generated key string and the stored record
+	 *
+	 * @example
+	 * ```typescript
+	 * const { key, record } = await keys.create({
+	 *   ownerId: "user_123",
+	 *   name: "Production Key",
+	 *   description: "API key for production access",
+	 *   scopes: ["read", "write"],
+	 *   expiresAt: "2025-12-31T00:00:00.000Z",
+	 *   tags: ["production", "api"]
+	 * });
+	 *
+	 * console.log("New key:", key);
+	 * console.log("Key ID:", record.id);
+	 * ```
+	 */
 	async create(
 		metadata: Partial<ApiKeyMetadata>
 	): Promise<{ key: string; record: ApiKeyRecord }> {
@@ -456,6 +565,27 @@ export class ApiKeyManager {
 		return isExpired(record.metadata.expiresAt);
 	}
 
+	/**
+	 * Check if an API key has a specific scope
+	 *
+	 * @param record - The API key record
+	 * @param scope - Required scope to check
+	 * @param options - Optional scope check options (e.g., resource filtering)
+	 * @returns True if the key has the required scope
+	 *
+	 * @example
+	 * ```typescript
+	 * const record = await storage.findById("key_id");
+	 * if (keys.hasScope(record, "read")) {
+	 *   // Key has read permission
+	 * }
+	 *
+	 * // Check for resource-specific scope
+	 * if (keys.hasScope(record, "write", { resource: "project:123" })) {
+	 *   // Key can write to project 123
+	 * }
+	 * ```
+	 */
 	hasScope(
 		record: ApiKeyRecord,
 		scope: PermissionScope,
@@ -469,6 +599,21 @@ export class ApiKeyManager {
 		);
 	}
 
+	/**
+	 * Check if an API key has any of the required scopes
+	 *
+	 * @param record - The API key record
+	 * @param requiredScopes - Array of scopes to check
+	 * @param options - Optional scope check options
+	 * @returns True if the key has at least one of the required scopes
+	 *
+	 * @example
+	 * ```typescript
+	 * if (keys.hasAnyScope(record, ["read", "write"])) {
+	 *   // Key has read OR write permission
+	 * }
+	 * ```
+	 */
 	hasAnyScope(
 		record: ApiKeyRecord,
 		requiredScopes: PermissionScope[],
@@ -482,6 +627,21 @@ export class ApiKeyManager {
 		);
 	}
 
+	/**
+	 * Check if an API key has all required scopes
+	 *
+	 * @param record - The API key record
+	 * @param requiredScopes - Array of scopes to check
+	 * @param options - Optional scope check options
+	 * @returns True if the key has all required scopes
+	 *
+	 * @example
+	 * ```typescript
+	 * if (keys.hasAllScopes(record, ["read", "write"])) {
+	 *   // Key has read AND write permissions
+	 * }
+	 * ```
+	 */
 	hasAllScopes(
 		record: ApiKeyRecord,
 		requiredScopes: PermissionScope[],
@@ -563,6 +723,32 @@ export class ApiKeyManager {
 	}
 }
 
+/**
+ * Create an API key manager instance
+ *
+ * @param config - Configuration options for key generation and storage
+ * @returns An ApiKeyManager instance for creating and verifying keys
+ *
+ * @example
+ * ```typescript
+ * // Simple in-memory setup
+ * const keys = createKeys({ prefix: "sk_" });
+ *
+ * // Redis setup with caching
+ * const keys = createKeys({
+ *   prefix: "sk_live_",
+ *   storage: "redis",
+ *   redis: redisClient,
+ *   cache: true,
+ *   cacheTtl: 300
+ * });
+ *
+ * // Custom storage adapter
+ * const keys = createKeys({
+ *   storage: myCustomStorage
+ * });
+ * ```
+ */
 export function createKeys(config: ConfigInput = {}): ApiKeyManager {
 	return new ApiKeyManager(config);
 }

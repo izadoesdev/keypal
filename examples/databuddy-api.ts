@@ -1,12 +1,5 @@
 import { drizzle } from "drizzle-orm/node-postgres";
-import {
-	boolean,
-	index,
-	jsonb,
-	pgTable,
-	text,
-	timestamp,
-} from "drizzle-orm/pg-core";
+import { index, jsonb, pgTable, text } from "drizzle-orm/pg-core";
 import { Pool } from "pg";
 import type { ApiKeyRecord, PermissionScope } from "../src";
 import { createKeys } from "../src";
@@ -17,30 +10,16 @@ export const apikey = pgTable(
 	{
 		id: text().primaryKey().notNull(),
 		keyHash: text("key_hash").notNull(),
-		ownerId: text("owner_id").notNull(),
-		name: text("name"),
-		description: text("description"),
-		scopes: jsonb("scopes").default([]),
-		resources: jsonb("resources").default({}),
-		enabled: boolean("enabled").notNull().default(true),
-		revokedAt: timestamp("revoked_at", { mode: "string" }),
-		rotatedTo: text("rotated_to"),
-		expiresAt: timestamp("expires_at", { mode: "string" }),
-		createdAt: timestamp("created_at", { mode: "string" }).notNull(),
-		lastUsedAt: timestamp("last_used_at", { mode: "string" }),
+		metadata: jsonb("metadata").notNull(),
 	},
-	(table) => [
-		index("apikey_key_hash_idx").on(table.keyHash),
-		index("apikey_owner_id_idx").on(table.ownerId),
-		index("apikey_enabled_idx").on(table.enabled),
-	]
+	(table) => [index("apikey_key_hash_idx").on(table.keyHash)]
 );
 
 const pool = new Pool({
 	connectionString: process.env.DATABASE_URL,
 });
 
-const db = drizzle(pool);
+const db = drizzle(pool, { schema: { apikey } });
 
 const keys = createKeys({
 	prefix: "dt_bd_sk_",

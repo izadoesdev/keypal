@@ -25,6 +25,9 @@ export const ApiKeyErrorCode = {
 
 	/** Cache error occurred */
 	CACHE_ERROR: "CACHE_ERROR",
+
+	/** Rate limit exceeded */
+	RATE_LIMIT_EXCEEDED: "RATE_LIMIT_EXCEEDED",
 } as const;
 
 export type ApiKeyErrorCode =
@@ -42,6 +45,7 @@ export const ApiKeyErrorMessages: Record<ApiKeyErrorCode, string> = {
 	[ApiKeyErrorCode.DISABLED]: "API key is disabled",
 	[ApiKeyErrorCode.STORAGE_ERROR]: "Storage error occurred",
 	[ApiKeyErrorCode.CACHE_ERROR]: "Cache error occurred",
+	[ApiKeyErrorCode.RATE_LIMIT_EXCEEDED]: "Rate limit exceeded",
 };
 
 /**

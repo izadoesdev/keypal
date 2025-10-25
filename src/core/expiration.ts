@@ -8,8 +8,5 @@ export function isExpired(expiresAt: string | null | undefined): boolean {
 export function getExpirationTime(
 	expiresAt: string | null | undefined
 ): Date | null {
-	if (!expiresAt) {
-		return null;
-	}
-	return new Date(expiresAt);
+	return expiresAt ? new Date(expiresAt) : null;
 }

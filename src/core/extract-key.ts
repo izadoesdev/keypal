@@ -24,16 +24,6 @@ function getHeader(
 	return null;
 }
 
-function extractBearerToken(value: string): string | null {
-	const trimmed = value.trim();
-	const token = trimmed.slice(BEARER_PREFIX_LENGTH).trim();
-	return token || null;
-}
-
-function isBearerToken(value: string): boolean {
-	return value.toLowerCase().startsWith(BEARER_PREFIX);
-}
-
 function processHeaderValue(
 	value: string,
 	extractBearer: boolean
@@ -45,14 +35,16 @@ function processHeaderValue(
 
 	const lowerValue = trimmed.toLowerCase();
 
-	if (lowerValue === BEARER_PREFIX.trim()) {
+	// Check if it's exactly "bearer" with nothing after
+	if (lowerValue === "bearer") {
 		return null;
 	}
 
-	if (isBearerToken(value)) {
+	// Check if it starts with "bearer "
+	if (lowerValue.startsWith(BEARER_PREFIX)) {
 		if (extractBearer) {
-			const token = extractBearerToken(value);
-			return token;
+			const token = trimmed.slice(BEARER_PREFIX_LENGTH).trim();
+			return token || null;
 		}
 		return trimmed;
 	}

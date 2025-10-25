@@ -10,7 +10,6 @@ export class MemoryStore implements Storage {
 			throw new Error(`API key with id ${record.id} already exists`);
 		}
 		this.keys.set(record.id, record);
-		// todo: save tags
 	}
 
 	async findByHash(keyHash: string): Promise<ApiKeyRecord | null> {

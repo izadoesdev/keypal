@@ -53,7 +53,7 @@ jobs:
           docker run --rm --network host -e PGPASSWORD=keypal_dev postgres:17-alpine psql -h localhost -U keypal -d postgres -c "CREATE DATABASE keypal_drizzle;" || true
 
       - name: Run tests
-        run: bun run test --exclude=test:prisma
+        run: bun run test --exclude '**/prisma.test.ts'
 
       - name: Run Redis tests
         run: bun run test:redis

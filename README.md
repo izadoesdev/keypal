@@ -11,6 +11,7 @@ A TypeScript library for secure API key management with cryptographic hashing, e
 - **Secure by Default**: SHA-256/SHA-512 hashing with optional salt and timing-safe comparison
 - **Smart Key Detection**: Automatically extracts keys from `Authorization`, `x-api-key`, or custom headers
 - **Built-in Caching**: Optional in-memory or Redis caching for validated keys
+- **Rate Limiting**: Optional automatic rate limiting on verify calls with atomic counters
 - **Flexible Storage**: Memory, Redis, and Drizzle ORM adapters included
 - **Scope-based Permissions**: Fine-grained access control
 - **Key Management**: Enable/disable, rotate, and soft-revoke keys with audit trails
@@ -80,6 +81,12 @@ const keys = createKeys({
   // Usage tracking
   autoTrackUsage: true, // Automatically update lastUsedAt on verify
   
+  // Rate limiting (opt-in, requires cache)
+  rateLimit: {
+    maxRequests: 100,
+    windowMs: 60_000, // 1 minute window
+  },
+  
   // Header detection
   headerNames: ['x-api-key', 'authorization'],
   extractBearer: true,
@@ -141,8 +148,13 @@ const result = await keys.verify(headers, {
 // Check result
 if (result.valid) {
   console.log(result.record)
+  // If rate limiting is enabled, result.rateLimit will include rate limit info
+  if (result.rateLimit) {
+    console.log(`${result.rateLimit.remaining} requests remaining`)
+  }
 } else {
-  console.log(result.error) // 'Missing API key' | 'Invalid API key' | 'API key has expired' | 'API key is disabled' | 'API key has been revoked'
+  console.log(result.error) // 'Missing API key' | 'Invalid API key' | 'API key has expired' | 'API key is disabled' | 'API key has been revoked' | 'Rate limit exceeded'
+  console.log(result.errorCode) // 'MISSING_KEY' | 'INVALID_KEY' | 'EXPIRED' | 'DISABLED' | 'REVOKED' | 'RATE_LIMIT_EXCEEDED'
 }
 ```
 
@@ -168,6 +180,147 @@ await keys.updateLastUsed(record.id)
 
 // Skip tracking for specific requests
 const result = await keys.verify(headers, { skipTracking: true })
+```
+
+### Rate Limiting
+
+Protect your API from abuse with built-in rate limiting. Uses the same cache infrastructure (memory or Redis) for high-performance request tracking.
+
+**Note:** Cache must be enabled to use rate limiting.
+
+#### Automatic Rate Limiting
+
+Enable rate limiting globally on all verify calls by adding the `rateLimit` config option:
+
+```typescript
+const keys = createKeys({
+  cache: true, // Required for rate limiting
+  rateLimit: {
+    maxRequests: 100,
+    windowMs: 60_000, // 1 minute window
+  },
+})
+
+// Rate limiting happens automatically on verify()
+const result = await keys.verify(headers)
+
+if (!result.valid) {
+  if (result.errorCode === 'RATE_LIMIT_EXCEEDED') {
+    return {
+      error: 'Too many requests',
+      status: 429,
+      resetAt: result.rateLimit.resetAt,
+      resetMs: result.rateLimit.resetMs,
+    }
+  }
+  return { error: result.error, status: 401 }
+}
+
+// Rate limit info is included in successful responses
+console.log({
+  current: result.rateLimit.current,      // Current request count
+  limit: result.rateLimit.limit,          // Max requests allowed
+  remaining: result.rateLimit.remaining,  // Remaining requests
+  resetMs: result.rateLimit.resetMs,      // Time until reset (ms)
+  resetAt: result.rateLimit.resetAt,      // ISO timestamp when window resets
+})
+```
+
+**Complete middleware example with rate limit headers**:
+```typescript
+app.use('/api/*', async (c, next) => {
+  const result = await keys.verify(c.req.raw.headers)
+  
+  if (!result.valid) {
+    if (result.errorCode === 'RATE_LIMIT_EXCEEDED') {
+      c.header('Retry-After', Math.ceil(result.rateLimit.resetMs / 1000).toString())
+      c.header('X-RateLimit-Limit', result.rateLimit.limit.toString())
+      c.header('X-RateLimit-Remaining', '0')
+      c.header('X-RateLimit-Reset', result.rateLimit.resetAt)
+      return c.json({ error: 'Too many requests' }, 429)
+    }
+    return c.json({ error: result.error }, 401)
+  }
+
+  // Set rate limit headers on successful requests
+  c.header('X-RateLimit-Limit', result.rateLimit.limit.toString())
+  c.header('X-RateLimit-Remaining', result.rateLimit.remaining.toString())
+  c.header('X-RateLimit-Reset', result.rateLimit.resetAt)
+
+  c.set('apiKey', result.record)
+  await next()
+})
+```
+
+#### Manual Rate Limiting (Advanced)
+
+For custom rate limiting scenarios (e.g., different limits per endpoint), create rate limiters manually:
+
+```typescript
+const keys = createKeys({
+  cache: true, // Required for rate limiting
+})
+
+// Create custom rate limiters
+const strictLimiter = keys.createRateLimiter({
+  maxRequests: 10,
+  windowMs: 60_000, // 10 requests per minute
+})
+
+const normalLimiter = keys.createRateLimiter({
+  maxRequests: 100,
+  windowMs: 60_000, // 100 requests per minute
+})
+
+// Use strict limiter for sensitive endpoints
+app.post('/api/sensitive', async (c) => {
+  const result = await keys.verify(c.req.raw.headers)
+  if (!result.valid) {
+    return c.json({ error: result.error }, 401)
+  }
+
+  const rateLimit = await strictLimiter.check(result.record)
+  if (!rateLimit.allowed) {
+    return c.json({ error: 'Too many requests' }, 429)
+  }
+  // ...
+})
+
+// Use normal limiter for regular endpoints
+app.get('/api/data', async (c) => {
+  const result = await keys.verify(c.req.raw.headers)
+  if (!result.valid) {
+    return c.json({ error: result.error }, 401)
+  }
+
+  const rateLimit = await normalLimiter.check(result.record)
+  if (!rateLimit.allowed) {
+    return c.json({ error: 'Too many requests' }, 429)
+  }
+  // ...
+})
+```
+
+**Dry-run checks** (check without incrementing):
+```typescript
+const rateLimit = await rateLimiter.check(record, { increment: false })
+```
+
+**Custom identifiers** (e.g., per-owner limits instead of per-key):
+```typescript
+const rateLimit = await rateLimiter.check(record, {
+  identifier: record.metadata.ownerId, // Rate limit by user, not by key
+})
+```
+
+**Manual reset**:
+```typescript
+await rateLimiter.reset(record)
+```
+
+**Get current count without incrementing**:
+```typescript
+const count = await rateLimiter.getCurrentCount(record)
 ```
 
 ### Helper Methods
@@ -379,6 +532,34 @@ interface VerifyResult {
   valid: boolean
   record?: ApiKeyRecord
   error?: string
+  errorCode?: ApiKeyErrorCode
+  rateLimit?: {
+    current: number
+    limit: number
+    remaining: number
+    resetMs: number
+    resetAt: string
+  }
+}
+
+interface RateLimitConfig {
+  maxRequests: number
+  windowMs: number
+  keyPrefix?: string
+}
+
+interface RateLimitResult {
+  allowed: boolean
+  current: number
+  limit: number
+  resetMs: number
+  resetAt: string
+  remaining: number
+}
+
+interface RateLimitCheckOptions {
+  increment?: boolean
+  identifier?: string
 }
 ```
 

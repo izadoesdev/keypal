@@ -4,6 +4,7 @@
 // Core utilities
 export { getExpirationTime, isExpired } from "./core/expiration";
 export { extractKeyFromHeaders, hasApiKey } from "./core/extract-key";
+export { RateLimiter } from "./core/rate-limiter";
 export { hasAllScopes, hasAnyScope, hasScope } from "./core/scopes";
 export type { ApiKeyManager, VerifyOptions, VerifyResult } from "./manager";
 export { createKeys } from "./manager";
@@ -21,4 +22,9 @@ export type {
 	Permission,
 	PermissionScope,
 } from "./types/permissions-types";
+export type {
+	RateLimitCheckOptions,
+	RateLimitConfig,
+	RateLimitResult,
+} from "./types/rate-limit-types";
 export type { Storage, StorageOptions } from "./types/storage-types";

@@ -5,26 +5,11 @@
 - ✅ Salt for hashing
 - ✅ Update last used timestamp
 - ✅ Key tags/labels
+- ✅ Rate limiting
 
 ## Recommended Additions
 
-### 1. Rate Limiting Helper
-```typescript
-interface RateLimitConfig {
-  maxRequests: number
-  windowMs: number
-}
-
-// Usage:
-const rateLimiter = keys.createRateLimiter({
-  maxRequests: 100,
-  windowMs: 60000, // 1 minute
-})
-
-await rateLimiter.check(apiKeyRecord)
-```
-
-### 2. Key Rotation
+### 1. Key Rotation
 ```typescript
 // Rotate a key (create new, mark old as rotating)
 const { newKey, oldRecord } = await keys.rotate(oldKeyId, {
@@ -32,7 +17,7 @@ const { newKey, oldRecord } = await keys.rotate(oldKeyId, {
 })
 ```
 
-### 3. Usage Analytics
+### 2. Usage Analytics
 ```typescript
 // Track key usage
 await keys.trackUsage(keyId, {
@@ -45,7 +30,7 @@ await keys.trackUsage(keyId, {
 const stats = await keys.getUsageStats(keyId)
 ```
 
-### 4. Webhook Events
+### 3. Webhook Events
 ```typescript
 keys.on('key.created', async (event) => {
   await sendWebhook(event.ownerId, 'key_created', event.data)
@@ -60,7 +45,7 @@ keys.on('key.expired', async (event) => {
 })
 ```
 
-### 5. IP Whitelisting
+### 4. IP Whitelisting
 ```typescript
 await keys.create({
   ownerId: 'user_123',
@@ -70,7 +55,7 @@ await keys.create({
 await keys.verify(key, { ipAddress: req.ip })
 ```
 
-### 6. Request Signing
+### 5. Request Signing
 ```typescript
 // HMAC-based request signing
 const signature = keys.sign(request, apiKey)
@@ -79,7 +64,7 @@ const signature = keys.sign(request, apiKey)
 const isValid = await keys.verifySignature(request, signature, keyId)
 ```
 
-### 7. Bulk Operations
+### 6. Bulk Operations
 ```typescript
 // Bulk create
 const results = await keys.createBulk([
@@ -91,7 +76,7 @@ const results = await keys.createBulk([
 await keys.revokeBulk(['key_1', 'key_2', 'key_3'])
 ```
 
-### 8. Key Templates
+### 7. Key Templates
 ```typescript
 // Define reusable templates
 keys.defineTemplate('readonly', {
@@ -104,7 +89,7 @@ const { key } = await keys.createFromTemplate('readonly', {
 })
 ```
 
-### 9. Audit Logging
+### 8. Audit Logging
 ```typescript
 interface AuditLog {
   action: 'created' | 'verified' | 'revoked' | 'updated'
@@ -124,20 +109,20 @@ const logs = await keys.getAuditLogs({
 ## Priority Recommendations
 
 **High Priority:**
-1. Rate limiting (security)
-2. Update last used timestamp (already added)
-3. Audit logging (compliance)
+- Rate limiting (security)
+- Update last used timestamp (already added)
+- Audit logging (compliance)
 
 **Medium Priority:**
-4. Key rotation (security best practice)
-5. IP whitelisting (additional security layer)
-6. Usage analytics (insights)
+- Key rotation (security best practice)
+- IP whitelisting (additional security layer)
+- Usage analytics (insights)
 
 **Low Priority:**
-7. Webhook events (automation)
-8. Request signing (advanced security)
-9. Key templates (convenience)
-10. Bulk operations (efficiency)
+- Webhook events (automation)
+- Request signing (advanced security)
+- Key templates (convenience)
+- Bulk operations (efficiency)
 
 ## Implementation Notes
 

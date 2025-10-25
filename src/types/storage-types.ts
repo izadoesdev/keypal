@@ -25,11 +25,18 @@ export type Storage = {
 	findByOwner(ownerId: string): Promise<ApiKeyRecord[]>;
 
 	/**
-	 * Find all API keys by tag(s)
-	 * @param tag - The tag(s) to search for {string | string[]}
+	 * Find all API keys by tag and optionally by owner
+	 * @param tag - The tag to search for {string}
 	 * @param ownerId - The owner ID to filter by (optional) {string}
 	 */
-	findByTag(tag: string | string[], ownerId?: string): Promise<ApiKeyRecord[]>;
+	findByTag(tag: string, ownerId?: string): Promise<ApiKeyRecord[]>;
+
+	/**
+	 * Find all API keys by tags and optionally by owner
+	 * @param tags - The tags to search for {string[]}
+	 * @param ownerId - The owner ID to filter by (optional) {string}
+	 */
+	findByTags(tags: string[], ownerId?: string): Promise<ApiKeyRecord[]>;
 
 	/**
 	 * Update metadata for an existing key

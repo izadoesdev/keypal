@@ -31,20 +31,16 @@ export class MemoryStore implements Storage {
 		);
 	}
 
-	async findByTag(
-		tag: string | string[],
-		ownerId?: string
-	): Promise<ApiKeyRecord[]> {
+	async findByTag(tag: string, ownerId?: string): Promise<ApiKeyRecord[]> {
+		return await this.findByTags([tag], ownerId);
+	}
+
+	async findByTags(tags: string[], ownerId?: string): Promise<ApiKeyRecord[]> {
 		return Array.from(await this.keys.values()).filter((record) => {
 			if (ownerId && record.metadata.ownerId !== ownerId) {
 				return false;
 			}
-			const recordTags = record.metadata.tags?.map((t) => t.toLowerCase());
-			// case insensitive tag matching
-			if (Array.isArray(tag)) {
-				return tag.some((t) => recordTags?.includes(t.toLowerCase()));
-			}
-			return recordTags?.includes(tag.toLowerCase());
+			return tags.some((t) => record.metadata.tags?.includes(t.toLowerCase()));
 		});
 	}
 

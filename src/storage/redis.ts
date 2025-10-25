@@ -84,13 +84,8 @@ export class RedisStore implements Storage {
 		);
 	}
 
-	async findByTag(
-		tag: string | string[],
-		ownerId?: string
-	): Promise<ApiKeyRecord[]> {
-		const tagKeys = Array.isArray(tag)
-			? tag.map((t) => this.tagKey(t.toLowerCase()))
-			: [this.tagKey(tag.toLowerCase())];
+	async findByTags(tags: string[], ownerId?: string): Promise<ApiKeyRecord[]> {
+		const tagKeys = tags.map((t) => this.tagKey(t.toLowerCase()));
 		const ownerKey = ownerId ? this.ownerKey(ownerId) : null;
 
 		const tagIds = await this.redis.sunion(
@@ -113,6 +108,10 @@ export class RedisStore implements Storage {
 				)
 				.filter((record): record is ApiKeyRecord => record !== null) ?? []
 		);
+	}
+
+	async findByTag(tag: string, ownerId?: string): Promise<ApiKeyRecord[]> {
+		return await this.findByTags([tag], ownerId);
 	}
 
 	async updateMetadata(

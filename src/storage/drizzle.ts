@@ -79,13 +79,8 @@ export class DrizzleStore implements Storage {
 		return rows.map(this.toRecord);
 	}
 
-	async findByTag(
-		tag: string | string[],
-		ownerId?: string
-	): Promise<ApiKeyRecord[]> {
-		const tagArray = Array.isArray(tag)
-			? tag.map((t) => t.toLowerCase())
-			: [tag.toLowerCase()];
+	async findByTags(tags: string[], ownerId?: string): Promise<ApiKeyRecord[]> {
+		const tagArray = tags.map((t) => t.toLowerCase());
 
 		const conditions: SQL[] = [];
 
@@ -106,6 +101,10 @@ export class DrizzleStore implements Storage {
 			.where(and(...conditions));
 
 		return rows.map(this.toRecord);
+	}
+
+	async findByTag(tag: string, ownerId?: string): Promise<ApiKeyRecord[]> {
+		return await this.findByTags([tag], ownerId);
 	}
 
 	async updateMetadata(

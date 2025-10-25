@@ -117,7 +117,6 @@ describe("DrizzleStore", () => {
 
 			await expect(store.save(record2)).rejects.toThrow();
 
-			// Original record should remain unchanged
 			const found = await store.findById(record1.id);
 			expect(found?.metadata.name).toBe("Original");
 			expect(found?.metadata.ownerId).toBe("user_overwrite");

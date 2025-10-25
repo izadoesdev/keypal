@@ -1,37 +1,17 @@
-# dependencies (bun install)
-node_modules
-
-# output
-out
-dist
-*.tgz
-
-# code coverage
-coverage
-*.lcov
-
-# logs
-logs
-_.log
-report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
-
-# dotenv environment variable files
-.env
-.env.development.local
-.env.test.local
-.env.production.local
-.env.local
-
-# caches
-.eslintcache
-.cache
-*.tsbuildinfo
-
-# IntelliJ based IDEs
-.idea
-
-# Finder (MacOS) folder config
+node_modules/
+dist/
+coverage/
+*.log
 .DS_Store
+.env
+.env.local
+.env.test.local
 
-# Docker volumes
-redis-data
+# Test databases
+test-prisma.db
+test-prisma.db-journal
+*.db
+*.db-journal
+
+# Prisma
+prisma/migrations/

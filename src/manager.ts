@@ -19,6 +19,7 @@ import { MemoryStore } from "./storage/memory";
 import { RedisStore } from "./storage/redis";
 import type { ApiKeyMetadata, ApiKeyRecord } from "./types/api-key-types";
 import type { Config, ConfigInput } from "./types/config-types";
+import { ApiKeyErrorCode, createErrorResult } from "./types/error-types";
 import type { PermissionScope } from "./types/permissions-types";
 import type { Storage } from "./types/storage-types";
 import { logger } from "./utils/logger";
@@ -33,6 +34,8 @@ export type VerifyResult = {
 	record?: ApiKeyRecord;
 	/** Error message if invalid */
 	error?: string;
+	/** Error code for programmatic handling */
+	errorCode?: ApiKeyErrorCode;
 };
 
 /**
@@ -258,11 +261,11 @@ export class ApiKeyManager {
 		}
 
 		if (!key) {
-			return { valid: false, error: "Missing API key" };
+			return createErrorResult(ApiKeyErrorCode.MISSING_KEY);
 		}
 
 		if (this.config.prefix && !key.startsWith(this.config.prefix)) {
-			return { valid: false, error: "Invalid API key format" };
+			return createErrorResult(ApiKeyErrorCode.INVALID_FORMAT);
 		}
 
 		const keyHash = this.hashKey(key);
@@ -275,16 +278,16 @@ export class ApiKeyManager {
 
 					if (isExpired(record.metadata.expiresAt)) {
 						await this.cache.del(`apikey:${keyHash}`);
-						return { valid: false, error: "API key has expired" };
+						return createErrorResult(ApiKeyErrorCode.EXPIRED);
 					}
 
 					if (record.metadata.revokedAt) {
 						await this.cache.del(`apikey:${keyHash}`);
-						return { valid: false, error: "API key has been revoked" };
+						return createErrorResult(ApiKeyErrorCode.REVOKED);
 					}
 
 					if (record.metadata.enabled === false) {
-						return { valid: false, error: "API key is disabled" };
+						return createErrorResult(ApiKeyErrorCode.DISABLED);
 					}
 
 					// Track usage if enabled
@@ -308,7 +311,7 @@ export class ApiKeyManager {
 		const record = await this.storage.findByHash(keyHash);
 
 		if (!record) {
-			return { valid: false, error: "Invalid API key" };
+			return createErrorResult(ApiKeyErrorCode.INVALID_KEY);
 		}
 
 		// Check expiration first
@@ -316,18 +319,18 @@ export class ApiKeyManager {
 			if (this.cache) {
 				await this.cache.del(`apikey:${keyHash}`);
 			}
-			return { valid: false, error: "API key has expired" };
+			return createErrorResult(ApiKeyErrorCode.EXPIRED);
 		}
 
 		if (record.metadata.revokedAt) {
 			if (this.cache) {
 				await this.cache.del(`apikey:${keyHash}`);
 			}
-			return { valid: false, error: "API key has been revoked" };
+			return createErrorResult(ApiKeyErrorCode.REVOKED);
 		}
 
 		if (record.metadata.enabled === false) {
-			return { valid: false, error: "API key is disabled" };
+			return createErrorResult(ApiKeyErrorCode.DISABLED);
 		}
 
 		if (this.cache && !options.skipCache) {

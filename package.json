@@ -27,6 +27,11 @@
       "require": "./dist/storage/drizzle.cjs",
       "import": "./dist/storage/drizzle.mjs"
     },
+    "./storage/prisma": {
+      "types": "./dist/storage/prisma.d.ts",
+      "require": "./dist/storage/prisma.cjs",
+      "import": "./dist/storage/prisma.mjs"
+    },
     "./drizzle": {
       "types": "./dist/drizzle/index.d.ts",
       "require": "./dist/drizzle/index.cjs",
@@ -55,6 +60,7 @@
     "permissions",
     "redis",
     "drizzle",
+    "prisma",
     "storage"
   ],
   "scripts": {
@@ -64,6 +70,8 @@
     "test:coverage": "vitest --coverage",
     "test:redis": "vitest run src/storage/redis.test.ts",
     "test:drizzle": "vitest run src/storage/drizzle.test.ts",
+    "test:prisma": "prisma generate && vitest run src/storage/prisma.test.ts",
+    "prisma:generate": "prisma generate",
     "bench": "bun run benchmark.ts",
     "example:hono": "bun run examples/hono-api.ts",
     "studio": "bunx drizzle-kit studio",
@@ -86,6 +94,7 @@
     "lint-staged": "^16.2.6",
     "mitata": "^1.0.34",
     "pg": "^8.16.3",
+    "prisma": "^6.18.0",
     "ultracite": "5.6.4",
     "unbuild": "^3.6.1",
     "undici": "^7.16.0",
@@ -97,7 +106,8 @@
   "optionalDependencies": {
     "ioredis": "^5.8.2",
     "drizzle-orm": "^0.44.6",
-    "drizzle-kit": "^0.31.0"
+    "drizzle-kit": "^0.31.0",
+    "@prisma/client": "^6.18.0"
   },
   "dependencies": {
     "nanoid": "^5.1.6",

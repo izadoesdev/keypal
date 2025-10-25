@@ -30,6 +30,12 @@ export type {
 	CreateApiKeyInput,
 } from "./types/api-key-types";
 export type { Config, ConfigInput } from "./types/config-types";
+export type { ApiKeyError } from "./types/error-types";
+export {
+	ApiKeyErrorCode,
+	createApiKeyError,
+	createErrorResult,
+} from "./types/error-types";
 export type {
 	Permission,
 	PermissionChecker,

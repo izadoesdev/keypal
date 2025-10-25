@@ -1,0 +1,18 @@
+// Prisma schema for testing keypal
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model ApiKey {
+  id       String @id
+  keyHash  String @unique
+  metadata Json
+
+  @@index([keyHash])
+  @@map("api_keys")
+}

@@ -4,6 +4,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { apikey } from "../drizzle/schema";
 import { createKeys } from "../manager";
 import type { ApiKeyRecord } from "../types/api-key-types";
+import { ApiKeyErrorCode } from "../types/error-types";
 import { DrizzleStore } from "./drizzle";
 
 const REGEX_UPDATED_NAME = /Updated \d/;
@@ -391,18 +392,22 @@ describe("DrizzleStore", () => {
 		});
 
 		it("should handle expired keys", async () => {
-			const { record } = await keys.create({
+			const { key, record } = await keys.create({
 				ownerId: "user_expired",
 				expiresAt: "2020-01-01T00:00:00.000Z",
 			});
 
 			const found = await store.findById(record.id);
 
+			const verifyResult = await keys.verify(key);
+			expect(verifyResult.valid).toBe(false);
+			expect(verifyResult.errorCode).toBe(ApiKeyErrorCode.EXPIRED);
+
 			expect(found?.metadata.expiresAt).toBe("2020-01-01T00:00:00.000Z");
 		});
 
 		it("should handle revoked keys", async () => {
-			const { record } = await keys.create({
+			const { key, record } = await keys.create({
 				ownerId: "user_revoked",
 			});
 
@@ -413,15 +418,23 @@ describe("DrizzleStore", () => {
 
 			const found = await store.findById(record.id);
 
+			const verifyResult = await keys.verify(key);
+			expect(verifyResult.valid).toBe(false);
+			expect(verifyResult.errorCode).toBe(ApiKeyErrorCode.REVOKED);
+
 			expect(found?.metadata.revokedAt).toBe("2024-01-01T00:00:00.000Z");
 			expect(found?.metadata.rotatedTo).toBe("key_new");
 		});
 
 		it("should handle disabled keys", async () => {
-			const { record } = await keys.create({
+			const { key, record } = await keys.create({
 				ownerId: "user_disabled",
 				enabled: false,
 			});
+
+			const verifyResult = await keys.verify(key);
+			expect(verifyResult.valid).toBe(false);
+			expect(verifyResult.errorCode).toBe(ApiKeyErrorCode.DISABLED);
 
 			const found = await store.findById(record.id);
 
@@ -429,7 +442,7 @@ describe("DrizzleStore", () => {
 		});
 
 		it("should handle keys with all metadata fields", async () => {
-			const { record } = await keys.create({
+			const { key, record } = await keys.create({
 				ownerId: "user_full",
 				name: "Full Metadata Key",
 				description: "Testing all fields",
@@ -441,21 +454,27 @@ describe("DrizzleStore", () => {
 				enabled: true,
 			});
 
+			const verifyResult = await keys.verify(key);
+			expect(verifyResult.valid).toBe(true);
+
 			const found = await store.findById(record.id);
 
 			expect(found?.metadata.name).toBe("Full Metadata Key");
 			expect(found?.metadata.description).toBe("Testing all fields");
 			expect(found?.metadata.scopes).toEqual(["read", "write", "admin"]);
 			expect(found?.metadata.enabled).toBe(true);
+			expect(found?.metadata.expiresAt).toBe("2025-12-31T00:00:00.000Z");
 		});
 	});
 
 	describe("Edge Cases", () => {
 		it("should handle keys with no scopes", async () => {
-			const { record } = await keys.create({
+			const { key, record } = await keys.create({
 				ownerId: "user_no_scopes",
 				scopes: [],
 			});
+			const verifyResult = await keys.verify(key);
+			expect(verifyResult.valid).toBe(true);
 
 			const found = await store.findById(record.id);
 
@@ -463,10 +482,12 @@ describe("DrizzleStore", () => {
 		});
 
 		it("should handle keys with never expiring", async () => {
-			const { record } = await keys.create({
+			const { key, record } = await keys.create({
 				ownerId: "user_no_expiry",
 				expiresAt: null,
 			});
+			const verifyResult = await keys.verify(key);
+			expect(verifyResult.valid).toBe(true);
 
 			const found = await store.findById(record.id);
 
@@ -474,9 +495,11 @@ describe("DrizzleStore", () => {
 		});
 
 		it("should handle updating from non-existent to existing metadata", async () => {
-			const { record } = await keys.create({
+			const { key, record } = await keys.create({
 				ownerId: "user_sparse",
 			});
+			const verifyResult = await keys.verify(key);
+			expect(verifyResult.valid).toBe(true);
 
 			await store.updateMetadata(record.id, {
 				name: "Added Name",
@@ -489,11 +512,13 @@ describe("DrizzleStore", () => {
 		});
 
 		it("should handle empty strings in text fields", async () => {
-			const { record } = await keys.create({
+			const { key, record } = await keys.create({
 				ownerId: "user_empty",
 				name: "",
 				description: "",
 			});
+			const verifyResult = await keys.verify(key);
+			expect(verifyResult.valid).toBe(true);
 
 			const found = await store.findById(record.id);
 
@@ -502,10 +527,12 @@ describe("DrizzleStore", () => {
 		});
 
 		it("should handle empty resources object", async () => {
-			const { record } = await keys.create({
+			const { key, record } = await keys.create({
 				ownerId: "user_empty_resources",
 				resources: {},
 			});
+			const verifyResult = await keys.verify(key);
+			expect(verifyResult.valid).toBe(true);
 
 			const found = await store.findById(record.id);
 
@@ -513,9 +540,11 @@ describe("DrizzleStore", () => {
 		});
 
 		it("should handle null values vs undefined", async () => {
-			const { record } = await keys.create({
+			const { key, record } = await keys.create({
 				ownerId: "user_null_vs_undefined",
 			});
+			const verifyResult = await keys.verify(key);
+			expect(verifyResult.valid).toBe(true);
 
 			await store.updateMetadata(record.id, {
 				name: null as unknown as undefined,
@@ -558,10 +587,12 @@ describe("DrizzleStore", () => {
 				(_, i) => `scope_${i}`
 			);
 
-			const { record } = await keys.create({
+			const { key, record } = await keys.create({
 				ownerId: "user_many_scopes",
 				scopes,
 			});
+			const verifyResult = await keys.verify(key);
+			expect(verifyResult.valid).toBe(true);
 
 			const found = await store.findById(record.id);
 
@@ -575,10 +606,13 @@ describe("DrizzleStore", () => {
 				resources[`project:${i}`] = ["read", "write"];
 			}
 
-			const { record } = await keys.create({
+			const { key, record } = await keys.create({
 				ownerId: "user_large_resources",
 				resources,
 			});
+
+			const verifyResult = await keys.verify(key);
+			expect(verifyResult.valid).toBe(true);
 
 			const found = await store.findById(record.id);
 
@@ -590,10 +624,13 @@ describe("DrizzleStore", () => {
 		it("should handle very long description text", async () => {
 			const longDescription = "A".repeat(LONG_DESCRIPTION_LENGTH);
 
-			const { record } = await keys.create({
+			const { key, record } = await keys.create({
 				ownerId: "user_long_description",
 				description: longDescription,
 			});
+
+			const verifyResult = await keys.verify(key);
+			expect(verifyResult.valid).toBe(true);
 
 			const found = await store.findById(record.id);
 
@@ -633,10 +670,13 @@ describe("DrizzleStore", () => {
 		});
 
 		it("should handle concurrent updates to same record (not saves)", async () => {
-			const { record } = await keys.create({
+			const { key, record } = await keys.create({
 				ownerId: "user_concurrent_same",
 				name: "Original",
 			});
+
+			const verifyResult = await keys.verify(key);
+			expect(verifyResult.valid).toBe(true);
 
 			// Use updateMetadata instead of save to avoid unique constraint errors
 			const updates = Array.from({ length: CONCURRENT_UPDATES_COUNT }, (_, i) =>
@@ -960,7 +1000,7 @@ describe("DrizzleStore", () => {
 			// Old key should be revoked
 			const oldResult = await keys.verify(oldKey);
 			expect(oldResult.valid).toBe(false);
-			expect(oldResult.error).toBe("API key has been revoked");
+			expect(oldResult.errorCode).toBe(ApiKeyErrorCode.REVOKED);
 
 			// New key should work
 			const newResult = await keys.verify(newKey);
@@ -1005,7 +1045,7 @@ describe("DrizzleStore", () => {
 
 			const verifyResult = await keys.verify(key);
 			expect(verifyResult.valid).toBe(false);
-			expect(verifyResult.error).toBe("API key has been revoked");
+			expect(verifyResult.errorCode).toBe(ApiKeyErrorCode.REVOKED);
 
 			const found = await store.findById(record.id);
 			expect(found?.metadata.revokedAt).toBeDefined();
@@ -1043,7 +1083,7 @@ describe("DrizzleStore", () => {
 
 			const verifyResult = await keys.verify(key);
 			expect(verifyResult.valid).toBe(false);
-			expect(verifyResult.error).toBe("API key is disabled");
+			expect(verifyResult.errorCode).toBe(ApiKeyErrorCode.DISABLED);
 
 			const found = await store.findById(record.id);
 			expect(found?.metadata.enabled).toBe(false);

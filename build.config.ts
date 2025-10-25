@@ -6,6 +6,7 @@ export default defineBuildConfig({
 		"src/storage/memory.ts",
 		"src/storage/redis.ts",
 		"src/storage/drizzle.ts",
+		"src/storage/prisma.ts",
 		"src/drizzle/index.ts",
 	],
 	declaration: true,
@@ -21,5 +22,6 @@ export default defineBuildConfig({
 		"drizzle-orm",
 		"drizzle-orm/pg-core",
 		"drizzle-orm/node-postgres",
+		"@prisma/client",
 	],
 });

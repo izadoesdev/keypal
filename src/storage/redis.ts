@@ -133,12 +133,35 @@ export class RedisStore implements Storage {
 			throw new Error(`API key with id ${id} not found`);
 		}
 
+		const oldTags = record.metadata.tags ?? [];
 		record.metadata = { ...record.metadata, ...metadata };
-		await this.redis.set(this.key(id), JSON.stringify(record));
+		const newTags = record.metadata.tags ?? [];
+
+		const pipeline = this.redis.pipeline();
+		pipeline.set(this.key(id), JSON.stringify(record));
 
 		if (metadata.revokedAt) {
-			await this.redis.del(this.hashKey(record.keyHash));
+			pipeline.del(this.hashKey(record.keyHash));
 		}
+
+		if (metadata.tags !== undefined) {
+			const oldTagsSet = new Set(oldTags.map((t) => t.toLowerCase()));
+			const newTagsSet = new Set(newTags.map((t) => t.toLowerCase()));
+
+			for (const tag of oldTagsSet) {
+				if (!newTagsSet.has(tag)) {
+					pipeline.srem(this.tagKey(tag), id);
+				}
+			}
+
+			for (const tag of newTagsSet) {
+				if (!oldTagsSet.has(tag)) {
+					pipeline.sadd(this.tagKey(tag), id);
+				}
+			}
+		}
+
+		await pipeline.exec();
 	}
 
 	async delete(id: string): Promise<void> {

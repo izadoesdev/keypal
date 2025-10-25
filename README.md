@@ -268,6 +268,7 @@ const customStorage: Storage = {
   findById: async (id) => { /* ... */ },
   findByOwner: async (ownerId) => { /* ... */ },
   findByTag: async (tag, ownerId) => { /* ... */ },
+  findByTags: async (tags, ownerId) => { /* ... */ },
   updateMetadata: async (id, metadata) => { /* ... */ },
   delete: async (id) => { /* ... */ },
   deleteByOwner: async (ownerId) => { /* ... */ },

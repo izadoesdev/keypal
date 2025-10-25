@@ -187,6 +187,69 @@ describe("DrizzleStore", () => {
 		});
 	});
 
+	describe("findByTag", () => {
+		it("should find all records by one tag", async () => {
+			const { record } = await keys.create({
+				ownerId: "user_123",
+				tags: ["test", "key", "more", "tags"],
+			});
+
+			const found = await store.findByTag("test");
+			expect(found).toHaveLength(1);
+			expect(found[0]?.id).toBe(record.id);
+		});
+
+		it("should find all records by multiple tags (OR logic)", async () => {
+			const { record: r1 } = await keys.create({
+				ownerId: "user_123",
+				tags: ["test", "key"], // Has both tags
+			});
+
+			const { record: r2 } = await keys.create({
+				ownerId: "user_123",
+				tags: ["test"], // Only has 'test', not 'key'
+			});
+
+			const found = await store.findByTags(["test", "key"]);
+			expect(found).toHaveLength(2); // Should return BOTH records (OR logic)
+			expect(found.some((r) => r.id === r1.id)).toBe(true);
+			expect(found.some((r) => r.id === r2.id)).toBe(true);
+		});
+
+		it("should find all records by owner and tag", async () => {
+			const { record } = await keys.create({
+				ownerId: "user_123",
+				tags: ["test"],
+			});
+
+			// Create a key with same tag but different owner
+			await keys.create({
+				ownerId: "user_456",
+				tags: ["test"],
+			});
+
+			const found = await store.findByTag("test", "user_123");
+			expect(found).toHaveLength(1);
+			expect(found[0]?.id).toBe(record.id);
+		});
+
+		it("should find all records by owner and multiple tags", async () => {
+			const { record } = await keys.create({
+				ownerId: "user_123",
+				tags: ["test", "key", "more", "tags"],
+			});
+
+			await keys.create({
+				ownerId: "user_456",
+				tags: ["test", "key"],
+			});
+
+			const found = await store.findByTags(["test", "key"], "user_123");
+			expect(found).toHaveLength(1);
+			expect(found[0]?.id).toBe(record.id);
+		});
+	});
+
 	describe("updateMetadata", () => {
 		it("should update metadata", async () => {
 			const { record } = await keys.create({
@@ -607,7 +670,11 @@ describe("DrizzleStore", () => {
 			await Promise.all(promises);
 
 			for (let i = 0; i < records.length; i++) {
-				const found = await store.findById(records[i].record.id);
+				const record = records.at(i);
+				if (!record) {
+					continue;
+				}
+				const found = await store.findById(record.record.id);
 				expect(found?.metadata.name).toBe(`Updated ${i}`);
 			}
 		});
@@ -1025,7 +1092,6 @@ describe("DrizzleStore", () => {
 		});
 
 		it("should handle rapid sequential saves", async () => {
-			// biome-ignore lint/style/noMagicNumbers: reduced count for testing
 			const TEST_COUNT = 100;
 			for (let i = 0; i < TEST_COUNT; i++) {
 				await keys.create({
@@ -1053,10 +1119,15 @@ describe("DrizzleStore", () => {
 			// Update some of them concurrently
 			const updatePromises = Array.from(
 				{ length: MIXED_UPDATES_COUNT },
-				(_, i) =>
-					store.updateMetadata(records[i]?.id || "", {
+				(_, i) => {
+					const record = records[i];
+					if (!record) {
+						throw new Error("Record not found");
+					}
+					return store.updateMetadata(record.id, {
 						name: `Updated ${i}`,
-					})
+					});
+				}
 			);
 
 			await Promise.all(updatePromises);

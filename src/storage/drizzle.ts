@@ -1,4 +1,4 @@
-import { arrayContains, eq } from "drizzle-orm";
+import { and, arrayContains, eq, exists, type SQL, sql } from "drizzle-orm";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import type { PgTable } from "drizzle-orm/pg-core";
 import type { apikey } from "../drizzle/schema";
@@ -57,7 +57,7 @@ export class DrizzleStore implements Storage {
 			.where(eq(this.table.keyHash, keyHash))
 			.limit(1);
 
-		return rows.length > 0 ? this.toRecord(rows[0]) : null;
+		return rows.length > 0 && rows[0] ? this.toRecord(rows[0]) : null;
 	}
 
 	async findById(id: string): Promise<ApiKeyRecord | null> {
@@ -67,7 +67,7 @@ export class DrizzleStore implements Storage {
 			.where(eq(this.table.id, id))
 			.limit(1);
 
-		return rows.length > 0 ? this.toRecord(rows[0]) : null;
+		return rows.length > 0 && rows[0] ? this.toRecord(rows[0]) : null;
 	}
 
 	async findByOwner(ownerId: string): Promise<ApiKeyRecord[]> {
@@ -77,6 +77,38 @@ export class DrizzleStore implements Storage {
 			.where(arrayContains(this.table.metadata, { ownerId }));
 
 		return rows.map(this.toRecord);
+	}
+
+	async findByTags(tags: string[], ownerId?: string): Promise<ApiKeyRecord[]> {
+		const conditions: SQL[] = [];
+
+		if (tags.length > 0) {
+			const lowercasedTags = tags.map((t) => t.toLowerCase());
+			conditions.push(
+				exists(
+					sql`(select 1 from jsonb_array_elements_text(${this.table.metadata}->'tags') as tag where tag in ${lowercasedTags})`
+				)
+			);
+		}
+
+		if (ownerId !== undefined) {
+			conditions.push(arrayContains(this.table.metadata, { ownerId }));
+		}
+
+		if (conditions.length === 0) {
+			return [];
+		}
+
+		const rows = await this.db
+			.select()
+			.from(this.table)
+			.where(and(...conditions));
+
+		return rows.map(this.toRecord);
+	}
+
+	async findByTag(tag: string, ownerId?: string): Promise<ApiKeyRecord[]> {
+		return await this.findByTags([tag], ownerId);
 	}
 
 	async updateMetadata(

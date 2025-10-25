@@ -4,6 +4,7 @@
 - ✅ Custom alphabet for key generation
 - ✅ Salt for hashing
 - ✅ Update last used timestamp
+- ✅ Key tags/labels
 
 ## Recommended Additions
 
@@ -44,18 +45,7 @@ await keys.trackUsage(keyId, {
 const stats = await keys.getUsageStats(keyId)
 ```
 
-### 4. Key Tags/Labels
-```typescript
-await keys.create({
-  ownerId: 'user_123',
-  tags: ['production', 'billing-api'],
-})
-
-// Find by tag
-const keys = await keys.findByTag('production')
-```
-
-### 5. Webhook Events
+### 4. Webhook Events
 ```typescript
 keys.on('key.created', async (event) => {
   await sendWebhook(event.ownerId, 'key_created', event.data)
@@ -70,7 +60,7 @@ keys.on('key.expired', async (event) => {
 })
 ```
 
-### 6. IP Whitelisting
+### 5. IP Whitelisting
 ```typescript
 await keys.create({
   ownerId: 'user_123',
@@ -80,7 +70,7 @@ await keys.create({
 await keys.verify(key, { ipAddress: req.ip })
 ```
 
-### 7. Request Signing
+### 6. Request Signing
 ```typescript
 // HMAC-based request signing
 const signature = keys.sign(request, apiKey)
@@ -89,7 +79,7 @@ const signature = keys.sign(request, apiKey)
 const isValid = await keys.verifySignature(request, signature, keyId)
 ```
 
-### 8. Bulk Operations
+### 7. Bulk Operations
 ```typescript
 // Bulk create
 const results = await keys.createBulk([
@@ -101,7 +91,7 @@ const results = await keys.createBulk([
 await keys.revokeBulk(['key_1', 'key_2', 'key_3'])
 ```
 
-### 9. Key Templates
+### 8. Key Templates
 ```typescript
 // Define reusable templates
 keys.defineTemplate('readonly', {
@@ -114,7 +104,7 @@ const { key } = await keys.createFromTemplate('readonly', {
 })
 ```
 
-### 10. Audit Logging
+### 9. Audit Logging
 ```typescript
 interface AuditLog {
   action: 'created' | 'verified' | 'revoked' | 'updated'

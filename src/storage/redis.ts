@@ -15,6 +15,10 @@ export class RedisStore implements Storage {
 		return `${this.prefix}${id}`;
 	}
 
+	private tagKey(tag: string): string {
+		return `${this.prefix}tag:${tag}`;
+	}
+
 	private hashKey(hash: string): string {
 		return `${this.prefix}hash:${hash}`;
 	}
@@ -33,6 +37,13 @@ export class RedisStore implements Storage {
 		pipeline.set(this.key(record.id), JSON.stringify(record));
 		pipeline.set(this.hashKey(record.keyHash), record.id);
 		pipeline.sadd(this.ownerKey(record.metadata.ownerId), record.id);
+
+		if (record.metadata.tags && record.metadata.tags.length > 0) {
+			for (const tag of record.metadata.tags) {
+				pipeline.sadd(this.tagKey(tag.toLowerCase()), record.id);
+			}
+		}
+
 		await pipeline.exec();
 	}
 
@@ -73,6 +84,46 @@ export class RedisStore implements Storage {
 		);
 	}
 
+	async findByTags(tags: string[], ownerId?: string): Promise<ApiKeyRecord[]> {
+		const tagKeys = tags.map((t) => this.tagKey(t.toLowerCase()));
+
+		if (tagKeys.length === 0) {
+			return [];
+		}
+
+		let tagIds =
+			tagKeys.length === 1 && tagKeys[0]
+				? await this.redis.smembers(tagKeys[0])
+				: await this.redis.sunion(...tagKeys);
+
+		if (ownerId !== undefined && tagIds.length > 0) {
+			const ownerIds = await this.redis.smembers(this.ownerKey(ownerId));
+			tagIds = tagIds.filter((id) => ownerIds.includes(id));
+		}
+
+		if (tagIds.length === 0) {
+			return [];
+		}
+
+		const pipeline = this.redis.pipeline();
+		for (const id of tagIds) {
+			pipeline.get(this.key(id));
+		}
+
+		const results = await pipeline.exec();
+		return (
+			results
+				?.map((result) =>
+					result?.[1] ? JSON.parse(result[1] as string) : null
+				)
+				.filter((record): record is ApiKeyRecord => record !== null) ?? []
+		);
+	}
+
+	async findByTag(tag: string, ownerId?: string): Promise<ApiKeyRecord[]> {
+		return await this.findByTags([tag], ownerId);
+	}
+
 	async updateMetadata(
 		id: string,
 		metadata: Partial<ApiKeyMetadata>
@@ -82,12 +133,35 @@ export class RedisStore implements Storage {
 			throw new Error(`API key with id ${id} not found`);
 		}
 
+		const oldTags = record.metadata.tags ?? [];
 		record.metadata = { ...record.metadata, ...metadata };
-		await this.redis.set(this.key(id), JSON.stringify(record));
+		const newTags = record.metadata.tags ?? [];
+
+		const pipeline = this.redis.pipeline();
+		pipeline.set(this.key(id), JSON.stringify(record));
 
 		if (metadata.revokedAt) {
-			await this.redis.del(this.hashKey(record.keyHash));
+			pipeline.del(this.hashKey(record.keyHash));
 		}
+
+		if (metadata.tags !== undefined) {
+			const oldTagsSet = new Set(oldTags.map((t) => t.toLowerCase()));
+			const newTagsSet = new Set(newTags.map((t) => t.toLowerCase()));
+
+			for (const tag of oldTagsSet) {
+				if (!newTagsSet.has(tag)) {
+					pipeline.srem(this.tagKey(tag), id);
+				}
+			}
+
+			for (const tag of newTagsSet) {
+				if (!oldTagsSet.has(tag)) {
+					pipeline.sadd(this.tagKey(tag), id);
+				}
+			}
+		}
+
+		await pipeline.exec();
 	}
 
 	async delete(id: string): Promise<void> {
@@ -100,6 +174,13 @@ export class RedisStore implements Storage {
 		pipeline.del(this.key(id));
 		pipeline.del(this.hashKey(record.keyHash));
 		pipeline.srem(this.ownerKey(record.metadata.ownerId), id);
+
+		if (record.metadata.tags && record.metadata.tags.length > 0) {
+			for (const tag of record.metadata.tags) {
+				pipeline.srem(this.tagKey(tag.toLowerCase()), id);
+			}
+		}
+
 		await pipeline.exec();
 	}
 
@@ -115,6 +196,11 @@ export class RedisStore implements Storage {
 			if (record) {
 				pipeline.del(this.key(id));
 				pipeline.del(this.hashKey(record.keyHash));
+				if (record.metadata.tags && record.metadata.tags.length > 0) {
+					for (const tag of record.metadata.tags) {
+						pipeline.srem(this.tagKey(tag.toLowerCase()), id);
+					}
+				}
 			}
 		}
 		pipeline.del(this.ownerKey(ownerId));

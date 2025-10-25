@@ -96,7 +96,7 @@ export class RedisStore implements Storage {
 		}
 
 		let tagIds =
-			tagKeys.length === 1
+			tagKeys.length === 1 && tagKeys[0]
 				? await this.redis.smembers(tagKeys[0])
 				: await this.redis.sunion(...tagKeys);
 

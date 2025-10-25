@@ -1,8 +1,8 @@
 {
   "compilerOptions": {
     "lib": ["ESNext"],
-    "target": "ESNext",
-    "module": "Preserve",
+    "target": "ES2022",
+    "module": "es2022",
     "moduleDetection": "force",
     "jsx": "react-jsx",
     "allowJs": true,

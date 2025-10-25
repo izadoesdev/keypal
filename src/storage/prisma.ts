@@ -15,7 +15,7 @@ import type { Storage } from "../types/storage-types";
  * @example
  * ```typescript
  * import { PrismaClient } from '@prisma/client';
- * import { PrismaStore } from 'keypal/storage/prisma';
+ * import { PrismaStore } from 'keypal/prisma';
  *
  * const prisma = new PrismaClient();
  * const store = new PrismaStore({ prisma, model: 'apiKey' });
@@ -98,7 +98,6 @@ export class PrismaStore implements Storage {
 	}
 
 	async findByOwner(ownerId: string): Promise<ApiKeyRecord[]> {
-		// Fetch all rows and filter client-side since Prisma's JSON queries don't work well with SQLite
 		const allRows = await this.model.findMany();
 		const filtered = allRows.filter(
 			(row: { id: string; keyHash: string; metadata: unknown }) => {

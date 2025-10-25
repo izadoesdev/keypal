@@ -1,25 +1,30 @@
 import { index, jsonb, pgTable, text, unique } from "drizzle-orm/pg-core";
 
 /**
- * Drizzle schema definition for API key storage
+ * Drizzle ORM integration for keypal
  *
- * Table columns:
- * - id: Unique identifier (TEXT PRIMARY KEY)
- * - keyHash: SHA-256 hash of the API key (TEXT, indexed)
- * - metadata: Additional key metadata (JSONB)
+ * Provides PostgreSQL storage adapter and schema definitions for API key management.
  *
  * @example
  * ```ts
- * import { apikey } from 'keypal/drizzle/schema'
+ * import { DrizzleStore, apikey } from 'keypal/drizzle'
  * import { drizzle } from 'drizzle-orm/node-postgres'
  * import { Pool } from 'pg'
  *
  * const pool = new Pool({ connectionString: process.env.DATABASE_URL })
  * const db = drizzle(pool)
  *
- * import { DrizzleStore } from 'keypal/storage/drizzle'
  * const store = new DrizzleStore({ db, table: apikey })
  * ```
+ */
+
+/**
+ * Drizzle schema definition for API key storage
+ *
+ * Table columns:
+ * - id: Unique identifier (TEXT PRIMARY KEY)
+ * - keyHash: SHA-256 hash of the API key (TEXT, indexed)
+ * - metadata: Additional key metadata (JSONB)
  */
 export const apikey = pgTable(
 	"apikey",

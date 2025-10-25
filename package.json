@@ -12,30 +12,25 @@
       "require": "./dist/index.cjs",
       "import": "./dist/index.mjs"
     },
-    "./storage/memory": {
+    "./memory": {
       "types": "./dist/storage/memory.d.ts",
       "require": "./dist/storage/memory.cjs",
       "import": "./dist/storage/memory.mjs"
     },
-    "./storage/redis": {
+    "./redis": {
       "types": "./dist/storage/redis.d.ts",
       "require": "./dist/storage/redis.cjs",
       "import": "./dist/storage/redis.mjs"
     },
-    "./storage/drizzle": {
-      "types": "./dist/storage/drizzle.d.ts",
-      "require": "./dist/storage/drizzle.cjs",
-      "import": "./dist/storage/drizzle.mjs"
+    "./drizzle": {
+      "types": "./dist/drizzle/schema.d.ts",
+      "require": "./dist/drizzle/schema.cjs",
+      "import": "./dist/drizzle/schema.mjs"
     },
-    "./storage/prisma": {
+    "./prisma": {
       "types": "./dist/storage/prisma.d.ts",
       "require": "./dist/storage/prisma.cjs",
       "import": "./dist/storage/prisma.mjs"
-    },
-    "./drizzle": {
-      "types": "./dist/drizzle/index.d.ts",
-      "require": "./dist/drizzle/index.cjs",
-      "import": "./dist/drizzle/index.mjs"
     }
   },
   "repository": {

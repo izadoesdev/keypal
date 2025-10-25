@@ -1,4 +1,7 @@
+import { readFileSync } from "node:fs";
 import { defineBuildConfig } from "unbuild";
+
+const pkg = JSON.parse(readFileSync("./package.json", "utf-8"));
 
 export default defineBuildConfig({
 	entries: [
@@ -7,7 +10,7 @@ export default defineBuildConfig({
 		"src/storage/redis.ts",
 		"src/storage/drizzle.ts",
 		"src/storage/prisma.ts",
-		"src/drizzle/index.ts",
+		"src/drizzle/schema.ts",
 	],
 	declaration: true,
 	clean: true,
@@ -16,6 +19,15 @@ export default defineBuildConfig({
 		esbuild: {
 			minify: true,
 			treeShaking: true,
+		},
+		output: {
+			banner: `/*!
+ * ${pkg.name} v${pkg.version}
+ * ${pkg.description}
+ * © ${new Date().getFullYear()} "Issa Nassar" <issa@databuddy.cc>
+ * Released under the ${pkg.license} License
+ * ${pkg.homepage}
+ */`,
 		},
 	},
 	externals: [

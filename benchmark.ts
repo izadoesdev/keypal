@@ -1,3 +1,6 @@
+/** biome-ignore-all lint/suspicious/noConsole: benchmarking */
+/** biome-ignore-all lint/style/noMagicNumbers: benchmarking */
+/** biome-ignore-all lint/suspicious/noExplicitAny: benchmarking */
 import { bench, do_not_optimize, run, summary } from "mitata";
 import { createKeys } from "./src/manager";
 import { MemoryStore } from "./src/storage/memory";
@@ -23,8 +26,8 @@ for (let i = 0; i < 100; i++) {
 	createdKeys.push(result);
 }
 
-const testKey = createdKeys[0]!.key;
-const testRecord = createdKeys[0]!.record;
+const testKey = createdKeys[0]?.key;
+const testRecord = createdKeys[0]?.record;
 console.log("Setup complete\n");
 
 async function main() {
@@ -48,6 +51,10 @@ async function main() {
 	});
 
 	await run();
+
+	if (!testKey) {
+		throw new Error("Test key not found");
+	}
 
 	// Verification Operations
 	summary(() => {
@@ -182,7 +189,7 @@ async function main() {
 	// Storage Layer
 	summary(() => {
 		bench("storage.save()", async () => {
-			const { key, record } = await keys.create({
+			const { record } = await keys.create({
 				ownerId: "storage_user",
 				name: "Storage Key",
 			});

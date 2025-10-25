@@ -16,6 +16,7 @@ import type { Storage } from "../types/storage-types";
  *
  * @example
  * ```typescript
+ * import { DrizzleStore } from 'keypal/drizzle';
  * import { apikey } from 'keypal/drizzle/schema';
  * const store = new DrizzleStore({ db, table: apikey });
  * ```

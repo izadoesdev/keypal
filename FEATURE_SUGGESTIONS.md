@@ -5,7 +5,8 @@
 - ✅ Salt for hashing
 - ✅ Update last used timestamp
 - ✅ Key tags/labels
-- ✅ Rate limiting
+- ✅ Rate limiting (opt-in)
+- ✅ Audit logging (opt-in)
 
 ## Recommended Additions
 
@@ -109,9 +110,9 @@ const logs = await keys.getAuditLogs({
 ## Priority Recommendations
 
 **High Priority:**
-- Rate limiting (security)
-- Update last used timestamp (already added)
-- Audit logging (compliance)
+- ~~Rate limiting (security)~~ ✅
+- ~~Update last used timestamp~~ ✅ (already added)
+- ~~Audit logging~~ ✅ (already added)
 
 **Medium Priority:**
 - Key rotation (security best practice)

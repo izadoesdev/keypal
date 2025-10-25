@@ -70,7 +70,7 @@
     "test:coverage": "vitest --coverage",
     "test:redis": "vitest run src/storage/redis.test.ts",
     "test:drizzle": "vitest run src/storage/drizzle.test.ts",
-    "test:prisma": "prisma generate && vitest run src/storage/prisma.test.ts",
+    "test:prisma": "vitest run src/storage/prisma.test.ts",
     "prisma:generate": "prisma generate",
     "bench": "bun run benchmark.ts",
     "example:hono": "bun run examples/hono-api.ts",

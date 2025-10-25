@@ -240,6 +240,11 @@ describe("DrizzleStore", () => {
 				tags: ["test", "key", "more", "tags"],
 			});
 
+			await keys.create({
+				ownerId: "user_456",
+				tags: ["test", "key"],
+			});
+
 			const found = await store.findByTag(["test", "key"], "user_123");
 			expect(found).toHaveLength(1);
 			expect(found[0]?.id).toBe(record.id);

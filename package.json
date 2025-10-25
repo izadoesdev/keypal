@@ -23,11 +23,6 @@
       "import": "./dist/storage/redis.mjs"
     },
     "./drizzle": {
-      "types": "./dist/storage/drizzle.d.ts",
-      "require": "./dist/storage/drizzle.cjs",
-      "import": "./dist/storage/drizzle.mjs"
-    },
-    "./drizzle/schema": {
       "types": "./dist/drizzle/schema.d.ts",
       "require": "./dist/drizzle/schema.cjs",
       "import": "./dist/drizzle/schema.mjs"

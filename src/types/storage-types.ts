@@ -1,4 +1,5 @@
 import type { ApiKeyMetadata, ApiKeyRecord } from "./api-key-types";
+import type { AuditLog, AuditLogQuery, AuditLogStats } from "./audit-log-types";
 
 /**
  * Storage interface for persisting API keys
@@ -52,6 +53,32 @@ export type Storage = {
 	 * Delete all keys for a specific owner
 	 */
 	deleteByOwner(ownerId: string): Promise<void>;
+
+	/**
+	 * Save an audit log entry (optional, only if audit logging is enabled)
+	 */
+	saveLog?(log: AuditLog): Promise<void>;
+
+	/**
+	 * Query audit logs (optional, only if audit logging is enabled)
+	 */
+	findLogs?(query: AuditLogQuery): Promise<AuditLog[]>;
+
+	/**
+	 * Count audit logs matching query (optional, only if audit logging is enabled)
+	 */
+	countLogs?(query: AuditLogQuery): Promise<number>;
+
+	/**
+	 * Delete audit logs matching query (optional, only if audit logging is enabled)
+	 * @returns Number of logs deleted
+	 */
+	deleteLogs?(query: AuditLogQuery): Promise<number>;
+
+	/**
+	 * Get statistics about audit logs (optional, only if audit logging is enabled)
+	 */
+	getLogStats?(ownerId: string): Promise<AuditLogStats>;
 };
 
 /**

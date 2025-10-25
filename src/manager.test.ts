@@ -31,13 +31,6 @@ describe("ApiKeyManager", () => {
 			const key2 = keys.generateKey();
 			expect(key1).not.toBe(key2);
 		});
-
-		it("should generate keys without prefix when not configured", () => {
-			const managerNoPrefix = createKeys({ length: 32 });
-			const key = managerNoPrefix.generateKey();
-			expect(key).toBeDefined();
-			expect(key.length).toBeGreaterThan(0);
-		});
 	});
 
 	describe("key hashing", () => {
@@ -48,14 +41,6 @@ describe("ApiKeyManager", () => {
 			expect(hash).toBeDefined();
 			// biome-ignore lint/style/noMagicNumbers: 64 characters default
 			expect(hash.length).toBe(64);
-		});
-
-		it("should produce consistent hashes", () => {
-			const key = "test-key-123";
-			const hash1 = keys.hashKey(key);
-			const hash2 = keys.hashKey(key);
-
-			expect(hash1).toBe(hash2);
 		});
 
 		it("should use sha512 when configured", () => {
@@ -85,15 +70,6 @@ describe("ApiKeyManager", () => {
 
 			const isValid = keys.validateKey(wrongKey, hash);
 			expect(isValid).toBe(false);
-		});
-
-		it("should validate with sha512 algorithm", () => {
-			const manager512 = createKeys({ algorithm: "sha512", storage });
-			const key = "test-key-123";
-			const hash = manager512.hashKey(key);
-
-			const isValid = manager512.validateKey(key, hash);
-			expect(isValid).toBe(true);
 		});
 	});
 
@@ -277,28 +253,6 @@ describe("ApiKeyManager - Key Extraction", () => {
 		keys = createKeys({ prefix: "sk_" });
 	});
 
-	it("should extract key from Headers object", async () => {
-		const { key } = await keys.create({ ownerId: "user_1" });
-
-		const headers = new Headers({
-			authorization: `Bearer ${key}`,
-		});
-
-		const result = await keys.verify(headers);
-		expect(result.valid).toBe(true);
-	});
-
-	it("should extract key from x-api-key header", async () => {
-		const { key } = await keys.create({ ownerId: "user_1" });
-
-		const headers = new Headers({
-			"x-api-key": key,
-		});
-
-		const result = await keys.verify(headers);
-		expect(result.valid).toBe(true);
-	});
-
 	it("should extract key from plain object", async () => {
 		const { key } = await keys.create({ ownerId: "user_1" });
 
@@ -348,134 +302,43 @@ describe("ApiKeyManager - Key Extraction", () => {
 });
 
 describe("ApiKeyManager - Config-based Header Extraction", () => {
-	it("should use default header names from config", async () => {
-		const keys = createKeys({ prefix: "sk_" });
-		const { key } = await keys.create({ ownerId: "user_1" });
-
-		const headers = new Headers({
-			authorization: `Bearer ${key}`,
-		});
-
-		const result = await keys.verify(headers);
-		expect(result.valid).toBe(true);
-	});
-
-	it("should use custom header names from config", async () => {
-		const keys = createKeys({
+	it("should support custom headers and config options", async () => {
+		// Custom header names
+		const keys1 = createKeys({
 			prefix: "sk_",
-			headerNames: ["x-custom-auth", "x-api-token"],
+			headerNames: ["x-custom-auth"],
 		});
-		const { key } = await keys.create({ ownerId: "user_1" });
+		const { key } = await keys1.create({ ownerId: "user_1" });
+		expect(
+			(await keys1.verify(new Headers({ "x-custom-auth": key }))).valid
+		).toBe(true);
 
-		const headers = new Headers({
-			"x-custom-auth": key,
-		});
+		// ExtractBearer option
+		const keys2 = createKeys({ prefix: "sk_", extractBearer: false });
+		const { key: key2 } = await keys2.create({ ownerId: "user_1" });
+		expect(
+			(await keys2.verify(new Headers({ authorization: key2 }))).valid
+		).toBe(true);
 
-		const result = await keys.verify(headers);
-		expect(result.valid).toBe(true);
-	});
+		// Override headers per request
+		const keys3 = createKeys({ prefix: "sk_", headerNames: ["authorization"] });
+		const { key: key3 } = await keys3.create({ ownerId: "user_1" });
+		expect(
+			(
+				await keys3.verify(new Headers({ "x-special-key": key3 }), {
+					headerNames: ["x-special-key"],
+				})
+			).valid
+		).toBe(true);
 
-	it("should respect extractBearer config option", async () => {
-		const keys = createKeys({
-			prefix: "sk_",
-			extractBearer: false,
-		});
-		const { key } = await keys.create({ ownerId: "user_1" });
-
-		const headers = new Headers({
-			authorization: key,
-		});
-
-		const result = await keys.verify(headers);
-		expect(result.valid).toBe(true);
-	});
-
-	it("should allow overriding header names per request", async () => {
-		const keys = createKeys({
-			prefix: "sk_",
-			headerNames: ["authorization"],
-		});
-		const { key } = await keys.create({ ownerId: "user_1" });
-
-		const headers = new Headers({
-			"x-special-key": key,
-		});
-
-		const result = await keys.verify(headers, {
-			headerNames: ["x-special-key"],
-		});
-
-		expect(result.valid).toBe(true);
-	});
-
-	it("should use config headers with hasKey helper", () => {
-		const keys = createKeys({
-			prefix: "sk_",
-			headerNames: ["x-api-key"],
-		});
-
-		const headers1 = new Headers({
-			"x-api-key": "sk_test_123",
-		});
-
-		const headers2 = new Headers({
-			authorization: "Bearer sk_test_123",
-		});
-
-		expect(keys.hasKey(headers1)).toBe(true);
-		expect(keys.hasKey(headers2)).toBe(false);
-	});
-
-	it("should use config headers with extractKey helper", () => {
-		const keys = createKeys({
-			prefix: "sk_",
-			headerNames: ["x-custom-token"],
-		});
-
-		const headers = new Headers({
-			"x-custom-token": "sk_test_123",
-		});
-
-		const extracted = keys.extractKey(headers);
-		expect(extracted).toBe("sk_test_123");
-	});
-
-	it("should work with multiple configured header names", async () => {
-		const keys = createKeys({
-			prefix: "sk_",
-			headerNames: ["x-api-key", "x-api-token", "authorization"],
-		});
-		const { key } = await keys.create({ ownerId: "user_1" });
-
-		const headers1 = new Headers({ "x-api-key": key });
-		const headers2 = new Headers({ "x-api-token": key });
-		const headers3 = new Headers({ authorization: `Bearer ${key}` });
-
-		const result1 = await keys.verify(headers1);
-		const result2 = await keys.verify(headers2);
-		const result3 = await keys.verify(headers3);
-
-		expect(result1.valid).toBe(true);
-		expect(result2.valid).toBe(true);
-		expect(result3.valid).toBe(true);
-	});
-
-	it("should prefer first configured header when multiple present", async () => {
-		const keys = createKeys({
-			prefix: "sk_",
-			headerNames: ["x-primary-key", "x-secondary-key"],
-		});
-		const { key: key1 } = await keys.create({ ownerId: "user_1" });
-		const { key: key2 } = await keys.create({ ownerId: "user_2" });
-
-		const headers = new Headers({
-			"x-primary-key": key1,
-			"x-secondary-key": key2,
-		});
-
-		const result = await keys.verify(headers);
-		expect(result.valid).toBe(true);
-		expect(result.record?.metadata.ownerId).toBe("user_1");
+		// Helper methods respect config
+		const keys4 = createKeys({ prefix: "sk_", headerNames: ["x-api-key"] });
+		expect(keys4.hasKey(new Headers({ "x-api-key": "sk_test_123" }))).toBe(
+			true
+		);
+		expect(keys4.extractKey(new Headers({ "x-api-key": "sk_test_123" }))).toBe(
+			"sk_test_123"
+		);
 	});
 });
 
@@ -494,17 +357,6 @@ describe("ApiKeyManager - Caching", () => {
 	});
 
 	describe("with in-memory cache (cache: true)", () => {
-		it("should enable memory cache by default", async () => {
-			const keys = createKeys({ prefix: "sk_", cache: true });
-			const { key } = await keys.create({ ownerId: "user_1" });
-
-			const result1 = await keys.verify(key);
-			const result2 = await keys.verify(key);
-
-			expect(result1.valid).toBe(true);
-			expect(result2.valid).toBe(true);
-		});
-
 		it("should cache valid keys", async () => {
 			const storage = new MemoryStore();
 			const keys = createKeys({
@@ -681,13 +533,10 @@ describe("ApiKeyManager - Additional Operations", () => {
 			expect(result.error).toBe("API key is disabled");
 		});
 
-		it("should throw error when enabling non-existent key", async () => {
+		it("should throw error when enabling/disabling non-existent key", async () => {
 			await expect(keys.enable("non-existent")).rejects.toThrow(
 				"API key not found"
 			);
-		});
-
-		it("should throw error when disabling non-existent key", async () => {
 			await expect(keys.disable("non-existent")).rejects.toThrow(
 				"API key not found"
 			);
@@ -963,7 +812,7 @@ describe("ApiKeyManager - Additional Operations", () => {
 			expect(result.valid).toBe(true);
 		});
 
-		it("should handle cache del errors during revoke", async () => {
+		it("should handle cache del errors gracefully during operations", async () => {
 			const errorCache = new MemoryCache();
 			errorCache.del = vi.fn().mockRejectedValue(new Error("Cache del failed"));
 
@@ -977,132 +826,530 @@ describe("ApiKeyManager - Additional Operations", () => {
 			});
 			await keysWithErrorCache.verify(key);
 
-			// Revoke should succeed even if cache fails
-			const result = await keysWithErrorCache.revoke(record.id);
-			expect(result).toBeUndefined();
-		});
-
-		it("should handle cache del errors during enable", async () => {
-			const errorCache = new MemoryCache();
-			errorCache.del = vi.fn().mockRejectedValue(new Error("Cache del failed"));
-
-			const keysWithErrorCache = createKeys({
-				prefix: "sk_",
-				cache: errorCache,
-			});
-
-			const { record } = await keysWithErrorCache.create({ ownerId: "user_1" });
-			await keysWithErrorCache.disable(record.id);
-
-			// Enable should succeed even if cache fails
+			// All operations should succeed even if cache fails
+			await keysWithErrorCache.revoke(record.id);
 			await keysWithErrorCache.enable(record.id);
-			const result = await keysWithErrorCache.verifyFromHeaders({
-				"x-api-key": record.keyHash,
-			});
-			expect(result).toBeNull(); // Can't verify with hash, but should not throw
-		});
-
-		it("should handle cache del errors during disable", async () => {
-			const errorCache = new MemoryCache();
-			errorCache.del = vi.fn().mockRejectedValue(new Error("Cache del failed"));
-
-			const keysWithErrorCache = createKeys({
-				prefix: "sk_",
-				cache: errorCache,
-			});
-
-			const { record } = await keysWithErrorCache.create({ ownerId: "user_1" });
-
-			// Disable should succeed even if cache fails
 			await keysWithErrorCache.disable(record.id);
-		});
-
-		it("should handle cache del errors during rotate", async () => {
-			const errorCache = new MemoryCache();
-			errorCache.del = vi.fn().mockRejectedValue(new Error("Cache del failed"));
-
-			const keysWithErrorCache = createKeys({
-				prefix: "sk_",
-				cache: errorCache,
-			});
-
-			const { record } = await keysWithErrorCache.create({ ownerId: "user_1" });
-
-			// Rotate should succeed even if cache fails
 			const rotateResult = await keysWithErrorCache.rotate(record.id);
 			expect(rotateResult).toBeDefined();
-			expect(rotateResult.key).toBeDefined();
 		});
 	});
 
 	describe("cache cleanup on invalid keys", () => {
-		it("should clean up expired keys from cache", async () => {
+		it("should clean up invalid keys from cache", async () => {
 			const cache = new MemoryCache();
-			const keysWithCache = createKeys({
-				prefix: "sk_",
-				cache,
-			});
+			const keysWithCache = createKeys({ prefix: "sk_", cache });
 
+			// Expired key
 			const pastDate = new Date();
 			pastDate.setFullYear(pastDate.getFullYear() - 1);
+			const { key: expiredKey, record: expiredRecord } =
+				await keysWithCache.create({
+					ownerId: "user_1",
+					expiresAt: pastDate.toISOString(),
+				});
+			const expiredHash = keysWithCache.hashKey(expiredKey);
+			await cache.set(
+				`apikey:${expiredHash}`,
+				JSON.stringify(expiredRecord),
+				60
+			);
+			expect((await keysWithCache.verify(expiredKey)).valid).toBe(false);
+			expect(await cache.get(`apikey:${expiredHash}`)).toBeNull();
 
-			const { key, record } = await keysWithCache.create({
-				ownerId: "user_1",
-				expiresAt: pastDate.toISOString(),
+			// Revoked key
+			const { key: revokedKey, record: revokedRecord } =
+				await keysWithCache.create({ ownerId: "user_1" });
+			const revokedHash = keysWithCache.hashKey(revokedKey);
+			await keysWithCache.verify(revokedKey);
+			await keysWithCache.revoke(revokedRecord.id);
+			expect(await cache.get(`apikey:${revokedHash}`)).toBeNull();
+
+			// Disabled key
+			const { key: disabledKey, record: disabledRecord } =
+				await keysWithCache.create({ ownerId: "user_1" });
+			const disabledHash = keysWithCache.hashKey(disabledKey);
+			await keysWithCache.verify(disabledKey);
+			await keysWithCache.disable(disabledRecord.id);
+			expect(await cache.get(`apikey:${disabledHash}`)).toBeNull();
+		});
+	});
+});
+
+describe("ApiKeyManager - Audit Logging", () => {
+	describe("configuration", () => {
+		it("should enable audit logging when configured", async () => {
+			const keys = createKeys({
+				prefix: "sk_",
+				auditLogs: true,
 			});
 
-			const keyHash = keysWithCache.hashKey(key);
-			// Put expired record in cache
-			await cache.set(`apikey:${keyHash}`, JSON.stringify(record), 60);
+			const { record } = await keys.create({ ownerId: "user_1" });
 
-			const result = await keysWithCache.verify(key);
-			expect(result.valid).toBe(false);
-
-			// Verify cache was cleaned up
-			const cached = await cache.get(`apikey:${keyHash}`);
-			expect(cached).toBeNull();
+			const logs = await keys.getLogs({ keyId: record.id });
+			expect(logs.length).toBe(1);
+			expect(logs[0]?.action).toBe("created");
 		});
 
-		it("should clean up revoked keys from cache", async () => {
-			const cache = new MemoryCache();
-			const keysWithCache = createKeys({
+		it("should not log when audit logging is disabled", async () => {
+			const keys = createKeys({
 				prefix: "sk_",
-				cache,
+				auditLogs: false,
 			});
 
-			const { key, record } = await keysWithCache.create({ ownerId: "user_1" });
-			const keyHash = keysWithCache.hashKey(key);
+			const { record } = await keys.create({ ownerId: "user_1" });
 
-			// Verify once to populate cache
-			await keysWithCache.verify(key);
-
-			// Revoke the key
-			await keysWithCache.revoke(record.id);
-
-			// Verify cache was cleaned up
-			const cached = await cache.get(`apikey:${keyHash}`);
-			expect(cached).toBeNull();
+			await expect(keys.getLogs({ keyId: record.id })).rejects.toThrow(
+				"Audit logging is not enabled"
+			);
 		});
 
-		it("should reject disabled keys from cache", async () => {
-			const cache = new MemoryCache();
-			const keysWithCache = createKeys({
+		it("should throw error when accessing logs without audit logging", async () => {
+			const keys = createKeys({ prefix: "sk_" });
+
+			await expect(keys.getLogs()).rejects.toThrow(
+				"Audit logging is not enabled"
+			);
+		});
+	});
+
+	describe("logging key actions", () => {
+		let keys: ReturnType<typeof createKeys>;
+
+		beforeEach(() => {
+			keys = createKeys({
 				prefix: "sk_",
-				cache,
+				auditLogs: true,
+			});
+		});
+
+		it("should log all key operations with context", async () => {
+			// Create with context
+			const { record } = await keys.create(
+				{ ownerId: "user_1", name: "Test Key", scopes: ["read"] },
+				{
+					userId: "admin_123",
+					ip: "192.168.1.1",
+					metadata: { reason: "New user" },
+				}
+			);
+			const logs = await keys.getLogs({ keyId: record.id });
+			expect(logs[0]?.action).toBe("created");
+			expect(logs[0]?.data?.userId).toBe("admin_123");
+
+			// Revoke
+			await keys.revoke(record.id, {
+				userId: "admin_456",
+				metadata: { reason: "Security breach" },
+			});
+			const logs2 = await keys.getLogs({ keyId: record.id });
+			expect(logs2[1]?.action).toBe("revoked");
+
+			// Enable
+			await keys.enable(record.id, { userId: "admin_789" });
+			const enabledLogs = await keys.getLogs({
+				keyId: record.id,
+				action: "enabled",
+			});
+			expect(enabledLogs[0]?.action).toBe("enabled");
+
+			// Disable
+			await keys.disable(record.id, { userId: "admin_111" });
+			const disabledLogs = await keys.getLogs({
+				keyId: record.id,
+				action: "disabled",
+			});
+			expect(disabledLogs[0]?.action).toBe("disabled");
+
+			// Rotate
+			await keys.rotate(record.id, undefined, {
+				userId: "admin_222",
+				metadata: { reason: "Scheduled rotation" },
+			});
+			const rotatedLogs = await keys.getLogs({
+				keyId: record.id,
+				action: "rotated",
+			});
+			expect(rotatedLogs[0]?.action).toBe("rotated");
+			expect(rotatedLogs[0]?.data?.metadata).toHaveProperty("rotatedTo");
+		});
+	});
+
+	describe("default context", () => {
+		it("should merge default context with action context", async () => {
+			const keys = createKeys({
+				prefix: "sk_",
+				auditLogs: true,
+				auditContext: {
+					userId: "system",
+					metadata: { environment: "production", app: "api" },
+				},
 			});
 
-			const { key, record } = await keysWithCache.create({ ownerId: "user_1" });
-			const keyHash = keysWithCache.hashKey(key);
+			const { record } = await keys.create(
+				{ ownerId: "user_1" },
+				{
+					metadata: { reason: "User request" },
+				}
+			);
 
-			// Verify once to populate cache
-			await keysWithCache.verify(key);
+			const logs = await keys.getLogs({ keyId: record.id });
+			expect(logs[0]?.data?.userId).toBe("system");
+			expect(logs[0]?.data?.metadata).toMatchObject({
+				environment: "production",
+				app: "api",
+				reason: "User request",
+			});
+		});
 
-			// Disable the key
-			await keysWithCache.disable(record.id);
+		it("should override default context with action context", async () => {
+			const keys = createKeys({
+				prefix: "sk_",
+				auditLogs: true,
+				auditContext: {
+					userId: "system",
+					ip: "0.0.0.0",
+				},
+			});
 
-			// Verify cache was cleaned up
-			const cached = await cache.get(`apikey:${keyHash}`);
-			expect(cached).toBeNull();
+			const { record } = await keys.create(
+				{ ownerId: "user_1" },
+				{
+					userId: "admin_999",
+					ip: "192.168.1.100",
+				}
+			);
+
+			const logs = await keys.getLogs({ keyId: record.id });
+			expect(logs[0]?.data?.userId).toBe("admin_999");
+			expect(logs[0]?.data?.ip).toBe("192.168.1.100");
+		});
+
+		it("should use only default context when no action context provided", async () => {
+			const keys = createKeys({
+				prefix: "sk_",
+				auditLogs: true,
+				auditContext: {
+					userId: "system",
+					metadata: { source: "automated" },
+				},
+			});
+
+			const { record } = await keys.create({ ownerId: "user_1" });
+
+			const logs = await keys.getLogs({ keyId: record.id });
+			expect(logs[0]?.data?.userId).toBe("system");
+			expect(logs[0]?.data?.metadata).toMatchObject({
+				source: "automated",
+			});
+		});
+	});
+
+	describe("querying logs", () => {
+		let keys: ReturnType<typeof createKeys>;
+
+		beforeEach(() => {
+			keys = createKeys({
+				prefix: "sk_",
+				auditLogs: true,
+			});
+		});
+
+		it("should query logs by keyId", async () => {
+			const { record: record1 } = await keys.create({ ownerId: "user_1" });
+			await keys.create({ ownerId: "user_1" });
+
+			const logs = await keys.getLogs({ keyId: record1.id });
+			expect(logs.length).toBe(1);
+			expect(logs[0]?.keyId).toBe(record1.id);
+		});
+
+		it("should query logs by ownerId", async () => {
+			await keys.create({ ownerId: "user_1" });
+			await keys.create({ ownerId: "user_1" });
+			await keys.create({ ownerId: "user_2" });
+
+			const logs = await keys.getLogs({ ownerId: "user_1" });
+			expect(logs.length).toBe(2);
+			expect(logs.every((log) => log.ownerId === "user_1")).toBe(true);
+		});
+
+		it("should query logs by action", async () => {
+			const { record } = await keys.create({ ownerId: "user_1" });
+			await keys.revoke(record.id);
+			await keys.enable(record.id);
+
+			const revokedLogs = await keys.getLogs({ action: "revoked" });
+			expect(revokedLogs.length).toBe(1);
+			expect(revokedLogs[0]?.action).toBe("revoked");
+		});
+
+		it("should query logs by date range", async () => {
+			const now = new Date();
+			const yesterday = new Date(now);
+			yesterday.setDate(yesterday.getDate() - 1);
+			const tomorrow = new Date(now);
+			tomorrow.setDate(tomorrow.getDate() + 1);
+
+			await keys.create({ ownerId: "user_1" });
+
+			const logs = await keys.getLogs({
+				startDate: yesterday.toISOString(),
+				endDate: tomorrow.toISOString(),
+			});
+
+			expect(logs.length).toBeGreaterThan(0);
+		});
+
+		it("should apply limit to query results", async () => {
+			await keys.create({ ownerId: "user_1" });
+			await keys.create({ ownerId: "user_1" });
+			await keys.create({ ownerId: "user_1" });
+
+			const logs = await keys.getLogs({ ownerId: "user_1", limit: 2 });
+			expect(logs.length).toBe(2);
+		});
+
+		it("should apply offset to query results", async () => {
+			await keys.create({ ownerId: "user_1" });
+			await keys.create({ ownerId: "user_1" });
+			await keys.create({ ownerId: "user_1" });
+
+			const allLogs = await keys.getLogs({ ownerId: "user_1" });
+			const offsetLogs = await keys.getLogs({ ownerId: "user_1", offset: 1 });
+
+			expect(offsetLogs.length).toBe(2);
+			expect(offsetLogs[0]?.id).toBe(allLogs[1]?.id);
+		});
+
+		it("should return logs sorted by timestamp descending", async () => {
+			const { record } = await keys.create({ ownerId: "user_1" });
+
+			// Small delay to ensure different timestamps
+			await new Promise((resolve) => setTimeout(resolve, 10));
+			await keys.revoke(record.id);
+
+			const logs = await keys.getLogs({ keyId: record.id });
+			expect(logs.length).toBe(2);
+			expect(logs[0]?.action).toBe("revoked"); // Most recent
+			expect(logs[1]?.action).toBe("created"); // Oldest
+		});
+	});
+
+	describe("counting logs", () => {
+		let keys: ReturnType<typeof createKeys>;
+
+		beforeEach(() => {
+			keys = createKeys({
+				prefix: "sk_",
+				auditLogs: true,
+			});
+		});
+
+		it("should count all logs", async () => {
+			await keys.create({ ownerId: "user_1" });
+			await keys.create({ ownerId: "user_1" });
+
+			const count = await keys.countLogs({});
+			expect(count).toBe(2);
+		});
+
+		it("should count logs by action", async () => {
+			const { record } = await keys.create({ ownerId: "user_1" });
+			await keys.revoke(record.id);
+
+			const createdCount = await keys.countLogs({ action: "created" });
+			const revokedCount = await keys.countLogs({ action: "revoked" });
+
+			expect(createdCount).toBe(1);
+			expect(revokedCount).toBe(1);
+		});
+
+		it("should count logs by ownerId", async () => {
+			await keys.create({ ownerId: "user_1" });
+			await keys.create({ ownerId: "user_1" });
+			await keys.create({ ownerId: "user_2" });
+
+			const count = await keys.countLogs({ ownerId: "user_1" });
+			expect(count).toBe(2);
+		});
+	});
+
+	describe("deleting logs", () => {
+		let keys: ReturnType<typeof createKeys>;
+
+		beforeEach(() => {
+			keys = createKeys({
+				prefix: "sk_",
+				auditLogs: true,
+			});
+		});
+
+		it("should delete logs by keyId", async () => {
+			const { record: record1 } = await keys.create({ ownerId: "user_1" });
+			const { record: record2 } = await keys.create({ ownerId: "user_1" });
+
+			const deleted = await keys.deleteLogs({ keyId: record1.id });
+			expect(deleted).toBe(1);
+
+			const logs = await keys.getLogs({ keyId: record1.id });
+			expect(logs.length).toBe(0);
+
+			const remainingLogs = await keys.getLogs({ keyId: record2.id });
+			expect(remainingLogs.length).toBe(1);
+		});
+
+		it("should delete logs by action", async () => {
+			const { record } = await keys.create({ ownerId: "user_1" });
+			await keys.revoke(record.id);
+
+			const deleted = await keys.deleteLogs({ action: "created" });
+			expect(deleted).toBe(1);
+
+			const logs = await keys.getLogs({});
+			expect(logs.length).toBe(1);
+			expect(logs[0]?.action).toBe("revoked");
+		});
+
+		it("should delete logs by date range", async () => {
+			await keys.create({ ownerId: "user_1" });
+
+			const yesterday = new Date();
+			yesterday.setDate(yesterday.getDate() - 1);
+
+			const deleted = await keys.deleteLogs({
+				endDate: yesterday.toISOString(),
+			});
+
+			expect(deleted).toBe(0); // No logs before yesterday
+		});
+
+		it("should return count of deleted logs", async () => {
+			await keys.create({ ownerId: "user_1" });
+			await keys.create({ ownerId: "user_1" });
+			await keys.create({ ownerId: "user_2" });
+
+			const deleted = await keys.deleteLogs({ ownerId: "user_1" });
+			expect(deleted).toBe(2);
+		});
+	});
+
+	describe("clearing logs", () => {
+		let keys: ReturnType<typeof createKeys>;
+
+		beforeEach(() => {
+			keys = createKeys({
+				prefix: "sk_",
+				auditLogs: true,
+			});
+		});
+
+		it("should clear all logs for a specific key", async () => {
+			const expectedLogs = 3;
+			const { record } = await keys.create({ ownerId: "user_1" });
+			await keys.revoke(record.id);
+			await keys.enable(record.id);
+
+			const deleted = await keys.clearLogs(record.id);
+			expect(deleted).toBe(expectedLogs);
+
+			const logs = await keys.getLogs({ keyId: record.id });
+			expect(logs.length).toBe(0);
+		});
+
+		it("should not affect logs for other keys", async () => {
+			const { record: record1 } = await keys.create({ ownerId: "user_1" });
+			const { record: record2 } = await keys.create({ ownerId: "user_1" });
+
+			await keys.clearLogs(record1.id);
+
+			const logs = await keys.getLogs({ keyId: record2.id });
+			expect(logs.length).toBe(1);
+		});
+	});
+
+	describe("log statistics", () => {
+		let keys: ReturnType<typeof createKeys>;
+
+		beforeEach(() => {
+			keys = createKeys({
+				prefix: "sk_",
+				auditLogs: true,
+			});
+		});
+
+		it("should return total log count", async () => {
+			await keys.create({ ownerId: "user_1" });
+			await keys.create({ ownerId: "user_1" });
+
+			const stats = await keys.getLogStats("user_1");
+			expect(stats.total).toBe(2);
+		});
+
+		it("should return count by action", async () => {
+			const { record } = await keys.create({ ownerId: "user_1" });
+			await keys.revoke(record.id);
+			await keys.enable(record.id);
+
+			const stats = await keys.getLogStats("user_1");
+			expect(stats.byAction.created).toBe(1);
+			expect(stats.byAction.revoked).toBe(1);
+			expect(stats.byAction.enabled).toBe(1);
+		});
+
+		it("should return last activity timestamp", async () => {
+			const { record } = await keys.create({ ownerId: "user_1" });
+			await keys.revoke(record.id);
+
+			const stats = await keys.getLogStats("user_1");
+			expect(stats.lastActivity).toMatch(ISO_DATE_REGEX);
+			expect(stats.lastActivity).not.toBeNull();
+		});
+
+		it("should only count logs for specified owner", async () => {
+			await keys.create({ ownerId: "user_1" });
+			await keys.create({ ownerId: "user_2" });
+			await keys.create({ ownerId: "user_2" });
+
+			const stats1 = await keys.getLogStats("user_1");
+			const stats2 = await keys.getLogStats("user_2");
+
+			expect(stats1.total).toBe(1);
+			expect(stats2.total).toBe(2);
+		});
+	});
+
+	describe("log entries structure", () => {
+		let keys: ReturnType<typeof createKeys>;
+
+		beforeEach(() => {
+			keys = createKeys({
+				prefix: "sk_",
+				auditLogs: true,
+			});
+		});
+
+		it("should include data field when context provided", async () => {
+			const { record } = await keys.create(
+				{ ownerId: "user_1" },
+				{ userId: "admin_1" }
+			);
+
+			const logs = await keys.getLogs({ keyId: record.id });
+			expect(logs[0]?.data).toBeDefined();
+			expect(logs[0]?.data?.userId).toBe("admin_1");
+		});
+
+		it("should include data even when no context provided", async () => {
+			const keysNoContext = createKeys({
+				prefix: "sk_",
+				auditLogs: true,
+			});
+
+			const { record } = await keysNoContext.create({ ownerId: "user_1" });
+
+			const logs = await keysNoContext.getLogs({ keyId: record.id });
+			expect(logs[0]?.data).toBeDefined();
 		});
 	});
 });

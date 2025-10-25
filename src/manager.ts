@@ -18,6 +18,13 @@ import { validateKey } from "./core/validate";
 import { MemoryStore } from "./storage/memory";
 import { RedisStore } from "./storage/redis";
 import type { ApiKeyMetadata, ApiKeyRecord } from "./types/api-key-types";
+import type {
+	ActionContext,
+	AuditAction,
+	AuditLog,
+	AuditLogQuery,
+	AuditLogStats,
+} from "./types/audit-log-types";
 import type { Config, ConfigInput } from "./types/config-types";
 import { ApiKeyErrorCode, createErrorResult } from "./types/error-types";
 import type { PermissionScope } from "./types/permissions-types";
@@ -86,6 +93,8 @@ export class ApiKeyManager {
 	private readonly revokedKeyTtl: number;
 	private readonly isRedisStorage: boolean;
 	private readonly autoTrackUsage: boolean;
+	private readonly auditLogsEnabled: boolean;
+	private readonly defaultContext?: ActionContext;
 
 	constructor(config: ConfigInput = {}) {
 		this.config = {
@@ -101,6 +110,8 @@ export class ApiKeyManager {
 		this.revokedKeyTtl = config.revokedKeyTtl ?? 604_800; // 7 days default (604800 seconds)
 		this.isRedisStorage = config.storage === "redis";
 		this.autoTrackUsage = config.autoTrackUsage ?? true;
+		this.auditLogsEnabled = config.auditLogs ?? false;
+		this.defaultContext = config.auditContext;
 
 		if (config.storage === "redis") {
 			if (!config.redis) {
@@ -377,7 +388,8 @@ export class ApiKeyManager {
 	 * ```
 	 */
 	async create(
-		metadata: Partial<ApiKeyMetadata>
+		metadata: Partial<ApiKeyMetadata>,
+		context?: ActionContext
 	): Promise<{ key: string; record: ApiKeyRecord }> {
 		const key = this.generateKey();
 		const keyHash = this.hashKey(key);
@@ -404,6 +416,17 @@ export class ApiKeyManager {
 		};
 
 		await this.storage.save(record);
+
+		// Create audit log with key details
+		await this.logAction("created", record.id, record.metadata.ownerId, {
+			...context,
+			metadata: {
+				name: record.metadata.name,
+				scopes: record.metadata.scopes,
+				...context?.metadata,
+			},
+		});
+
 		return { key, record };
 	}
 
@@ -427,7 +450,7 @@ export class ApiKeyManager {
 		return await this.storage.findByOwner(ownerId);
 	}
 
-	async revoke(id: string): Promise<void> {
+	async revoke(id: string, context?: ActionContext): Promise<void> {
 		const record = await this.findById(id);
 		if (!record) {
 			return;
@@ -436,6 +459,9 @@ export class ApiKeyManager {
 		await this.storage.updateMetadata(id, {
 			revokedAt: new Date().toISOString(),
 		});
+
+		// Create audit log
+		await this.logAction("revoked", id, record.metadata.ownerId, context);
 
 		if (this.cache) {
 			try {
@@ -462,7 +488,7 @@ export class ApiKeyManager {
 		await Promise.all(records.map((record) => this.revoke(record.id)));
 	}
 
-	async enable(id: string): Promise<void> {
+	async enable(id: string, context?: ActionContext): Promise<void> {
 		const record = await this.findById(id);
 		if (!record) {
 			throw new Error("API key not found");
@@ -471,6 +497,9 @@ export class ApiKeyManager {
 		await this.storage.updateMetadata(id, {
 			enabled: true,
 		});
+
+		// Create audit log
+		await this.logAction("enabled", id, record.metadata.ownerId, context);
 
 		if (this.cache) {
 			try {
@@ -481,7 +510,7 @@ export class ApiKeyManager {
 		}
 	}
 
-	async disable(id: string): Promise<void> {
+	async disable(id: string, context?: ActionContext): Promise<void> {
 		const record = await this.findById(id);
 		if (!record) {
 			throw new Error("API key not found");
@@ -490,6 +519,9 @@ export class ApiKeyManager {
 		await this.storage.updateMetadata(id, {
 			enabled: false,
 		});
+
+		// Create audit log
+		await this.logAction("disabled", id, record.metadata.ownerId, context);
 
 		if (this.cache) {
 			try {
@@ -502,7 +534,8 @@ export class ApiKeyManager {
 
 	async rotate(
 		id: string,
-		metadata?: Partial<ApiKeyMetadata>
+		metadata?: Partial<ApiKeyMetadata>,
+		context?: ActionContext
 	): Promise<{ key: string; record: ApiKeyRecord; oldRecord: ApiKeyRecord }> {
 		const oldRecord = await this.findById(id);
 		if (!oldRecord) {
@@ -524,6 +557,15 @@ export class ApiKeyManager {
 		await this.storage.updateMetadata(id, {
 			rotatedTo: newRecord.id,
 			revokedAt: new Date().toISOString(),
+		});
+
+		// Create audit log with rotation details
+		await this.logAction("rotated", id, oldRecord.metadata.ownerId, {
+			...context,
+			metadata: {
+				rotatedTo: newRecord.id,
+				...context?.metadata,
+			},
 		});
 
 		if (this.cache) {
@@ -551,6 +593,168 @@ export class ApiKeyManager {
 		await this.storage.updateMetadata(id, {
 			lastUsedAt: new Date().toISOString(),
 		});
+	}
+
+	/**
+	 * Create an audit log entry for a key action
+	 * @private
+	 */
+	private async logAction(
+		action: AuditAction,
+		keyId: string,
+		ownerId: string,
+		context?: ActionContext
+	): Promise<void> {
+		if (!(this.auditLogsEnabled && this.storage.saveLog)) {
+			return;
+		}
+
+		// Merge default context with action-specific context
+		const mergedContext = {
+			...this.defaultContext,
+			...context,
+			// Merge metadata objects if both exist
+			...(this.defaultContext?.metadata || context?.metadata
+				? {
+						metadata: {
+							...this.defaultContext?.metadata,
+							...context?.metadata,
+						},
+					}
+				: {}),
+		};
+
+		const log: AuditLog = {
+			id: nanoid(),
+			action,
+			keyId,
+			ownerId,
+			timestamp: new Date().toISOString(),
+			data: Object.keys(mergedContext).length > 0 ? mergedContext : undefined,
+		};
+
+		try {
+			await this.storage.saveLog(log);
+		} catch (error) {
+			logger.error("Failed to save audit log:", error);
+		}
+	}
+
+	/**
+	 * Get audit logs with optional filters
+	 *
+	 * @param query - Query options for filtering audit logs
+	 * @returns Array of audit log entries
+	 *
+	 * @example
+	 * ```typescript
+	 * const logs = await keys.getLogs({
+	 *   keyId: 'key_123',
+	 *   startDate: '2025-01-01',
+	 *   endDate: '2025-12-31',
+	 *   limit: 100
+	 * });
+	 * ```
+	 */
+	async getLogs(query: AuditLogQuery = {}): Promise<AuditLog[]> {
+		if (!this.auditLogsEnabled) {
+			throw new Error("Audit logging is not enabled");
+		}
+
+		if (!this.storage.findLogs) {
+			throw new Error("Storage does not support audit logging");
+		}
+
+		return await this.storage.findLogs(query);
+	}
+
+	/**
+	 * Count audit logs matching query
+	 *
+	 * @param query - Query options for filtering audit logs
+	 * @returns Number of matching logs
+	 *
+	 * @example
+	 * ```typescript
+	 * const count = await keys.countLogs({ action: 'created' });
+	 * ```
+	 */
+	async countLogs(query: AuditLogQuery = {}): Promise<number> {
+		if (!this.auditLogsEnabled) {
+			throw new Error("Audit logging is not enabled");
+		}
+
+		if (!this.storage.countLogs) {
+			throw new Error("Storage does not support audit logging");
+		}
+
+		return await this.storage.countLogs(query);
+	}
+
+	/**
+	 * Delete audit logs matching query
+	 *
+	 * @param query - Query options for filtering logs to delete
+	 * @returns Number of logs deleted
+	 *
+	 * @example
+	 * ```typescript
+	 * // Delete old logs
+	 * const deleted = await keys.deleteLogs({
+	 *   endDate: '2024-01-01'
+	 * });
+	 * ```
+	 */
+	async deleteLogs(query: AuditLogQuery): Promise<number> {
+		if (!this.auditLogsEnabled) {
+			throw new Error("Audit logging is not enabled");
+		}
+
+		if (!this.storage.deleteLogs) {
+			throw new Error("Storage does not support audit logging");
+		}
+
+		return await this.storage.deleteLogs(query);
+	}
+
+	/**
+	 * Delete all audit logs for a specific key
+	 *
+	 * @param keyId - The key ID to delete logs for
+	 * @returns Number of logs deleted
+	 *
+	 * @example
+	 * ```typescript
+	 * const deleted = await keys.clearLogs('key_123');
+	 * ```
+	 */
+	async clearLogs(keyId: string): Promise<number> {
+		return await this.deleteLogs({ keyId });
+	}
+
+	/**
+	 * Get statistics about audit logs for an owner
+	 *
+	 * @param ownerId - Owner ID to get stats for
+	 * @returns Statistics including total count, counts by action, and last activity
+	 *
+	 * @example
+	 * ```typescript
+	 * const stats = await keys.getLogStats('user_123');
+	 * console.log(`Total logs: ${stats.total}`);
+	 * console.log(`Created: ${stats.byAction.created}`);
+	 * ```
+	 */
+	async getLogStats(ownerId: string): Promise<AuditLogStats> {
+		if (!this.auditLogsEnabled) {
+			throw new Error("Audit logging is not enabled");
+		}
+
+		if (!this.storage.getLogStats) {
+			throw new Error("Storage does not support audit logging");
+		}
+
+		return await this.storage.getLogStats(ownerId);
 	}
 
 	async invalidateCache(keyHash: string): Promise<void> {

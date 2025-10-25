@@ -14,6 +14,7 @@ A TypeScript library for secure API key management with cryptographic hashing, e
 - **Flexible Storage**: Memory, Redis, and Drizzle ORM adapters included
 - **Scope-based Permissions**: Fine-grained access control
 - **Key Management**: Enable/disable, rotate, and soft-revoke keys with audit trails
+- **Audit Logging**: Track who did what, when, and why (opt-in)
 - **TypeScript**: Full type safety
 - **Zero Config**: Works out of the box with sensible defaults
 
@@ -79,6 +80,13 @@ const keys = createKeys({
   
   // Usage tracking
   autoTrackUsage: true, // Automatically update lastUsedAt on verify
+  
+  // Audit logging (opt-in)
+  auditLogs: true,  // Enable audit logging
+  auditContext: {   // Default context for all audit logs (optional)
+    userId: 'system',
+    metadata: { service: 'api' }
+  },
   
   // Header detection
   headerNames: ['x-api-key', 'authorization'],
@@ -168,6 +176,78 @@ await keys.updateLastUsed(record.id)
 
 // Skip tracking for specific requests
 const result = await keys.verify(headers, { skipTracking: true })
+```
+
+### Audit Logging
+
+Track all key operations with context about who performed each action:
+
+```typescript
+// Enable audit logging
+const keys = createKeys({
+  auditLogs: true,
+  auditContext: {
+    // Default context merged into all logs
+    metadata: { environment: 'production' }
+  }
+})
+
+// Actions are automatically logged with optional context
+await keys.create({
+  ownerId: 'user_123',
+  scopes: ['read']
+}, {
+  userId: 'admin_456',
+  ip: '192.168.1.1',
+  metadata: { reason: 'New customer onboarding' }
+})
+
+await keys.revoke('key_123', {
+  userId: 'admin_789',
+  metadata: { reason: 'Security breach' }
+})
+
+// Query logs
+const logs = await keys.getLogs({
+  keyId: 'key_123',
+  action: 'revoked',
+  startDate: '2025-01-01',
+  limit: 100
+})
+
+// Count logs
+const count = await keys.countLogs({ action: 'created' })
+
+// Get statistics
+const stats = await keys.getLogStats('user_123')
+console.log(stats.total)
+console.log(stats.byAction.created)
+console.log(stats.lastActivity)
+
+// Clean up old logs
+const deleted = await keys.deleteLogs({
+  endDate: '2024-01-01'
+})
+
+// Clear logs for a specific key
+await keys.clearLogs('key_123')
+```
+
+**Log Entry Structure:**
+
+```typescript
+{
+  id: 'log_xyz',
+  action: 'created' | 'revoked' | 'rotated' | 'enabled' | 'disabled',
+  keyId: 'key_123',
+  ownerId: 'user_456',
+  timestamp: '2025-10-25T12:00:00.000Z',
+  data: {
+    userId: 'admin_789',
+    ip: '192.168.1.1',
+    metadata: { reason: 'Security breach' }
+  }
+}
 ```
 
 ### Helper Methods

@@ -1,6 +1,7 @@
 import type Redis from "ioredis";
 import { type Static, Type } from "typebox";
 import type { Cache } from "../core/cache";
+import type { ActionContext } from "./audit-log-types";
 import type { Storage } from "./storage-types";
 
 export const ConfigSchema = Type.Object({
@@ -117,4 +118,16 @@ export type ConfigInput = {
 	 * @default true
 	 */
 	autoTrackUsage?: boolean;
+
+	/**
+	 * Enable audit logging for key actions
+	 * @default false
+	 */
+	auditLogs?: boolean;
+
+	/**
+	 * Default context for audit log entries (can be overridden per operation)
+	 * @example { userId: 'system', metadata: { service: 'api' } }
+	 */
+	auditContext?: ActionContext;
 };

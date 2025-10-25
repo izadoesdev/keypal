@@ -62,9 +62,7 @@ jobs:
           DATABASE_URL: postgresql://keypal:keypal_dev@localhost:5432/keypal
 
       - name: Generate Prisma Client
-        run: bun run prisma:generate
-        env:
-          DATABASE_URL: postgresql://keypal:keypal_dev@localhost:5432/keypal
+        run: bunx prisma generate
 
       - name: Push Prisma schema
         run: bunx prisma db push --skip-generate

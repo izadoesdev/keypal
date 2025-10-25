@@ -1,4 +1,4 @@
-import { arrayContains, eq } from "drizzle-orm";
+import { and, arrayContains, eq, type SQL, sql } from "drizzle-orm";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import type { PgTable } from "drizzle-orm/pg-core";
 import type { apikey } from "../drizzle/schema";
@@ -75,6 +75,35 @@ export class DrizzleStore implements Storage {
 			.select()
 			.from(this.table)
 			.where(arrayContains(this.table.metadata, { ownerId }));
+
+		return rows.map(this.toRecord);
+	}
+
+	async findByTag(
+		tag: string | string[],
+		ownerId?: string
+	): Promise<ApiKeyRecord[]> {
+		const tagArray = Array.isArray(tag)
+			? tag.map((t) => t.toLowerCase())
+			: [tag.toLowerCase()];
+
+		const conditions: SQL[] = [];
+
+		if (tagArray.length > 0) {
+			// case insensitive tag matching
+			conditions.push(
+				sql`${this.table.metadata}->'tags' ?| ARRAY[${tagArray.join(",")}]`
+			);
+		}
+
+		if (ownerId) {
+			conditions.push(arrayContains(this.table.metadata, { ownerId }));
+		}
+
+		const rows = await this.db
+			.select()
+			.from(this.table)
+			.where(and(...conditions));
 
 		return rows.map(this.toRecord);
 	}

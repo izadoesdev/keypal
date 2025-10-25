@@ -270,6 +270,7 @@ export class ApiKeyManager {
 		const key = this.generateKey();
 		const keyHash = this.hashKey(key);
 		const now = new Date().toISOString();
+		const tags = metadata.tags?.map((t) => t.toLowerCase());
 
 		const record: ApiKeyRecord = {
 			id: nanoid(),
@@ -286,6 +287,7 @@ export class ApiKeyManager {
 				enabled: metadata.enabled ?? true,
 				revokedAt: null,
 				rotatedTo: null,
+				tags,
 			},
 		};
 
@@ -299,6 +301,13 @@ export class ApiKeyManager {
 
 	async findById(id: string): Promise<ApiKeyRecord | null> {
 		return await this.storage.findById(id);
+	}
+
+	async findByTag(
+		tag: string | string[],
+		ownerId?: string
+	): Promise<ApiKeyRecord[]> {
+		return await this.storage.findByTag(tag, ownerId);
 	}
 
 	async list(ownerId: string): Promise<ApiKeyRecord[]> {
@@ -394,6 +403,7 @@ export class ApiKeyManager {
 			scopes: metadata?.scopes ?? oldRecord.metadata.scopes,
 			resources: metadata?.resources ?? oldRecord.metadata.resources,
 			expiresAt: metadata?.expiresAt ?? oldRecord.metadata.expiresAt,
+			tags: metadata?.tags ?? oldRecord.metadata.tags,
 		});
 
 		await this.storage.updateMetadata(id, {

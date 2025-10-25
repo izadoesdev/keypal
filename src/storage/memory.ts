@@ -10,6 +10,7 @@ export class MemoryStore implements Storage {
 			throw new Error(`API key with id ${record.id} already exists`);
 		}
 		this.keys.set(record.id, record);
+		// todo: save tags
 	}
 
 	async findByHash(keyHash: string): Promise<ApiKeyRecord | null> {
@@ -29,6 +30,23 @@ export class MemoryStore implements Storage {
 		return Array.from(await this.keys.values()).filter(
 			(record) => record.metadata.ownerId === ownerId
 		);
+	}
+
+	async findByTag(
+		tag: string | string[],
+		ownerId?: string
+	): Promise<ApiKeyRecord[]> {
+		return Array.from(await this.keys.values()).filter((record) => {
+			if (ownerId && record.metadata.ownerId !== ownerId) {
+				return false;
+			}
+			const recordTags = record.metadata.tags?.map((t) => t.toLowerCase());
+			// case insensitive tag matching
+			if (Array.isArray(tag)) {
+				return tag.some((t) => recordTags?.includes(t.toLowerCase()));
+			}
+			return recordTags?.includes(tag.toLowerCase());
+		});
 	}
 
 	async updateMetadata(

@@ -167,6 +167,41 @@ describe("RedisStore", () => {
 		});
 	});
 
+	describe("findByTag", () => {
+		it("should find all records by one tag", async () => {
+			const { record } = await keys.create({
+				ownerId: "user_123",
+				tags: ["test", "key", "more", "tags"],
+			});
+
+			const found = await store.findByTag("test");
+			expect(found).toHaveLength(1);
+			expect(found[0]?.id).toBe(record.id);
+		});
+
+		it("should find all records by multiple tags", async () => {
+			const { record } = await keys.create({
+				ownerId: "user_123",
+				tags: ["test", "key", "more", "tags"],
+			});
+
+			const found = await store.findByTag(["test", "key"]);
+			expect(found).toHaveLength(1);
+			expect(found[0]?.id).toBe(record.id);
+		});
+
+		it("should find all records by owner and tag", async () => {
+			const { record } = await keys.create({
+				ownerId: "user_123",
+				tags: ["test", "key", "more", "tags"],
+			});
+
+			const found = await store.findByTag("test", "user_123");
+			expect(found).toHaveLength(1);
+			expect(found[0]?.id).toBe(record.id);
+		});
+	});
+
 	describe("updateMetadata", () => {
 		it("should update metadata for a record", async () => {
 			const { record } = await keys.create({

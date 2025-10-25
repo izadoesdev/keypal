@@ -38,6 +38,8 @@ export const ApiKeyMetadataSchema = Type.Object({
 
 	/** ID of the key this was rotated to (for key rotation) */
 	rotatedTo: Type.Optional(Type.Union([Type.String(), Type.Null()])),
+
+	tags: Type.Optional(Type.Array(Type.String())),
 });
 
 export type ApiKeyMetadata = Static<typeof ApiKeyMetadataSchema>;

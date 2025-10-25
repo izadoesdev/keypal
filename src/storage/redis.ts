@@ -15,6 +15,10 @@ export class RedisStore implements Storage {
 		return `${this.prefix}${id}`;
 	}
 
+	private tagKey(tag: string): string {
+		return `${this.prefix}tag:${tag}`;
+	}
+
 	private hashKey(hash: string): string {
 		return `${this.prefix}hash:${hash}`;
 	}
@@ -33,6 +37,13 @@ export class RedisStore implements Storage {
 		pipeline.set(this.key(record.id), JSON.stringify(record));
 		pipeline.set(this.hashKey(record.keyHash), record.id);
 		pipeline.sadd(this.ownerKey(record.metadata.ownerId), record.id);
+
+		if (record.metadata.tags && record.metadata.tags.length > 0) {
+			for (const tag of record.metadata.tags) {
+				pipeline.sadd(this.tagKey(tag.toLowerCase()), record.id);
+			}
+		}
+
 		await pipeline.exec();
 	}
 
@@ -73,6 +84,37 @@ export class RedisStore implements Storage {
 		);
 	}
 
+	async findByTag(
+		tag: string | string[],
+		ownerId?: string
+	): Promise<ApiKeyRecord[]> {
+		const tagKeys = Array.isArray(tag)
+			? tag.map((t) => this.tagKey(t.toLowerCase()))
+			: [this.tagKey(tag.toLowerCase())];
+		const ownerKey = ownerId ? this.ownerKey(ownerId) : null;
+
+		const tagIds = await this.redis.sunion(
+			ownerKey ? [...tagKeys, ownerKey] : tagKeys
+		);
+		if (tagIds.length === 0) {
+			return [];
+		}
+
+		const pipeline = this.redis.pipeline();
+		for (const id of tagIds) {
+			pipeline.get(this.key(id));
+		}
+
+		const results = await pipeline.exec();
+		return (
+			results
+				?.map((result) =>
+					result?.[1] ? JSON.parse(result[1] as string) : null
+				)
+				.filter((record): record is ApiKeyRecord => record !== null) ?? []
+		);
+	}
+
 	async updateMetadata(
 		id: string,
 		metadata: Partial<ApiKeyMetadata>
@@ -100,6 +142,13 @@ export class RedisStore implements Storage {
 		pipeline.del(this.key(id));
 		pipeline.del(this.hashKey(record.keyHash));
 		pipeline.srem(this.ownerKey(record.metadata.ownerId), id);
+
+		if (record.metadata.tags && record.metadata.tags.length > 0) {
+			for (const tag of record.metadata.tags) {
+				pipeline.srem(this.tagKey(tag.toLowerCase()), id);
+			}
+		}
+
 		await pipeline.exec();
 	}
 
@@ -115,6 +164,11 @@ export class RedisStore implements Storage {
 			if (record) {
 				pipeline.del(this.key(id));
 				pipeline.del(this.hashKey(record.keyHash));
+				if (record.metadata.tags && record.metadata.tags.length > 0) {
+					for (const tag of record.metadata.tags) {
+						pipeline.srem(this.tagKey(tag.toLowerCase()), id);
+					}
+				}
 			}
 		}
 		pipeline.del(this.ownerKey(ownerId));

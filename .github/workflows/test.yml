@@ -48,18 +48,17 @@ jobs:
       - name: Install dependencies
         run: bun install
 
+      - name: Create Drizzle database
+        run: |
+          docker run --rm --network host -e PGPASSWORD=keypal_dev postgres:17-alpine psql -h localhost -U keypal -d postgres -c "CREATE DATABASE keypal_drizzle;" || true
+
       - name: Run tests
-        run: bun run test
+        run: bun run test --exclude=test:prisma
 
       - name: Run Redis tests
         run: bun run test:redis
         env:
           REDIS_URL: redis://localhost:6379
-
-      - name: Run Drizzle tests
-        run: bun run test:drizzle
-        env:
-          DATABASE_URL: postgresql://keypal:keypal_dev@localhost:5432/keypal
 
       - name: Push Prisma schema
         run: bunx prisma db push
@@ -70,6 +69,11 @@ jobs:
         run: bun run test:prisma
         env:
           DATABASE_URL: postgresql://keypal:keypal_dev@localhost:5432/keypal
+
+      - name: Run Drizzle tests
+        run: bun run test:drizzle
+        env:
+          DATABASE_URL: postgresql://keypal:keypal_dev@localhost:5432/keypal_drizzle
 
   build:
     name: Build

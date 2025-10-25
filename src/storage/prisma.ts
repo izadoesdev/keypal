@@ -98,7 +98,6 @@ export class PrismaStore implements Storage {
 	}
 
 	async findByOwner(ownerId: string): Promise<ApiKeyRecord[]> {
-		// Fetch all rows and filter client-side since Prisma's JSON queries don't work well with SQLite
 		const allRows = await this.model.findMany();
 		const filtered = allRows.filter(
 			(row: { id: string; keyHash: string; metadata: unknown }) => {

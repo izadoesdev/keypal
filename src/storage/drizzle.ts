@@ -1,4 +1,4 @@
-import { and, arrayContains, eq, type SQL, sql } from "drizzle-orm";
+import { and, arrayContains, eq, exists, type SQL, sql } from "drizzle-orm";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import type { PgTable } from "drizzle-orm/pg-core";
 import type { apikey } from "../drizzle/schema";
@@ -14,18 +14,6 @@ import type { Storage } from "../types/storage-types";
  * - metadata: JSONB field containing owner, scopes, and other metadata
  */
 export class DrizzleStore implements Storage {
-	/**
-	 * Helper to create SQL condition for JSONB array overlap using ?| operator
-	 * @param tags Array of tags to search for (will be lowercased)
-	 * @returns SQL condition for PostgreSQL's ?| operator
-	 */
-	private jsonbArrayOverlaps(tags: string[]): SQL {
-		const lowercasedTags = tags.map((t) => t.toLowerCase());
-		const quotedTags = lowercasedTags
-			.map((tag) => `'${tag.replace(/'/g, "''")}'`)
-			.join(",");
-		return sql`${this.table.metadata}->'tags' ?| ARRAY[${sql.raw(quotedTags)}]`;
-	}
 	private readonly db: NodePgDatabase<Record<string, PgTable>>;
 	private readonly table: typeof apikey;
 
@@ -95,7 +83,12 @@ export class DrizzleStore implements Storage {
 		const conditions: SQL[] = [];
 
 		if (tags.length > 0) {
-			conditions.push(this.jsonbArrayOverlaps(tags));
+			const lowercasedTags = tags.map((t) => t.toLowerCase());
+			conditions.push(
+				exists(
+					sql`(select 1 from jsonb_array_elements_text(${this.table.metadata}->'tags') as tag where tag in ${lowercasedTags})`
+				)
+			);
 		}
 
 		if (ownerId !== undefined) {

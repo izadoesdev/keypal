@@ -8,6 +8,7 @@ import {
 } from "./core/extract-key";
 import { generateKey } from "./core/generate";
 import { hashKey } from "./core/hash";
+import { RateLimiter } from "./core/rate-limiter";
 import {
 	hasAllScopesWithResources,
 	hasAnyScopeWithResources,
@@ -21,6 +22,7 @@ import type { ApiKeyMetadata, ApiKeyRecord } from "./types/api-key-types";
 import type { Config, ConfigInput } from "./types/config-types";
 import { ApiKeyErrorCode, createErrorResult } from "./types/error-types";
 import type { PermissionScope } from "./types/permissions-types";
+import type { RateLimitConfig } from "./types/rate-limit-types";
 import type { Storage } from "./types/storage-types";
 import { logger } from "./utils/logger";
 
@@ -723,6 +725,35 @@ export class ApiKeyManager {
 		return this.hasAllScopes(record, scopes, {
 			resource: `${resourceType}:${resourceId}`,
 		});
+	}
+
+	/**
+	 * Create a rate limiter instance
+	 *
+	 * @param config - Rate limit configuration
+	 * @returns A RateLimiter instance for checking request limits
+	 *
+	 * @example
+	 * ```typescript
+	 * const rateLimiter = keys.createRateLimiter({
+	 *   maxRequests: 100,
+	 *   windowMs: 60000, // 1 minute
+	 * });
+	 *
+	 * const result = await rateLimiter.check(apiKeyRecord);
+	 * if (!result.allowed) {
+	 *   throw new Error(`Rate limit exceeded. Reset in ${result.resetMs}ms`);
+	 * }
+	 * ```
+	 */
+	createRateLimiter(config: RateLimitConfig): RateLimiter {
+		if (!this.cache) {
+			throw new Error(
+				"[keypal] Cache is required for rate limiting. Enable cache in ApiKeyManager config."
+			);
+		}
+
+		return new RateLimiter(this.cache, config);
 	}
 }
 

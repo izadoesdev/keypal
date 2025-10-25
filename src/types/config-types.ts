@@ -1,6 +1,7 @@
 import type Redis from "ioredis";
 import { type Static, Type } from "typebox";
 import type { Cache } from "../core/cache";
+import type { RateLimitConfig } from "./rate-limit-types";
 import type { Storage } from "./storage-types";
 
 export const ConfigSchema = Type.Object({
@@ -117,4 +118,13 @@ export type ConfigInput = {
 	 * @default true
 	 */
 	autoTrackUsage?: boolean;
+
+	/**
+	 * Rate limit configuration for verify calls
+	 * When enabled, each verify() call will be rate-limited based on the API key
+	 * Requires cache to be enabled
+	 * @default undefined (no rate limiting)
+	 * @example { maxRequests: 100, windowMs: 60000 } // 100 requests per minute
+	 */
+	rateLimit?: RateLimitConfig;
 };

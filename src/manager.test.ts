@@ -1105,4 +1105,145 @@ describe("ApiKeyManager - Additional Operations", () => {
 			expect(cached).toBeNull();
 		});
 	});
+
+	describe("rate limiting", () => {
+		it("should enforce rate limits on verify calls", async () => {
+			const keysWithRateLimit = createKeys({
+				prefix: "sk_",
+				cache: true,
+				rateLimit: {
+					maxRequests: 3,
+					windowMs: 60_000,
+				},
+			});
+
+			const { key } = await keysWithRateLimit.create({ ownerId: "user_1" });
+
+			// First 3 requests should succeed
+			const ALLOWED_REQUESTS = 3;
+			for (let i = 0; i < ALLOWED_REQUESTS; i++) {
+				const result = await keysWithRateLimit.verify(key);
+				expect(result.valid).toBe(true);
+				expect(result.rateLimit).toBeDefined();
+				expect(result.rateLimit?.limit).toBe(ALLOWED_REQUESTS);
+				expect(result.rateLimit?.remaining).toBe(ALLOWED_REQUESTS - (i + 1));
+			}
+
+			// 4th request should be rate limited
+			const blockedResult = await keysWithRateLimit.verify(key);
+			expect(blockedResult.valid).toBe(false);
+			expect(blockedResult.errorCode).toBe("RATE_LIMIT_EXCEEDED");
+			expect(blockedResult.error).toBe("Rate limit exceeded");
+			expect(blockedResult.rateLimit).toBeDefined();
+			// biome-ignore lint/style/noMagicNumbers: 4 is the blocked request count
+			expect(blockedResult.rateLimit?.current).toBe(4);
+			expect(blockedResult.rateLimit?.remaining).toBe(0);
+		});
+
+		it("should not include rate limit info when rate limiting is disabled", async () => {
+			const keysWithoutRateLimit = createKeys({
+				prefix: "sk_",
+				cache: true,
+			});
+
+			const { key } = await keysWithoutRateLimit.create({ ownerId: "user_1" });
+			const result = await keysWithoutRateLimit.verify(key);
+
+			expect(result.valid).toBe(true);
+			expect(result.rateLimit).toBeUndefined();
+		});
+
+		it("should throw error when rate limiting is configured without cache", () => {
+			expect(() =>
+				createKeys({
+					prefix: "sk_",
+					rateLimit: {
+						maxRequests: 100,
+						windowMs: 60_000,
+					},
+				})
+			).toThrow("Cache is required for rate limiting");
+		});
+
+		it("should rate limit per API key", async () => {
+			const keysWithRateLimit = createKeys({
+				prefix: "sk_",
+				cache: true,
+				rateLimit: {
+					maxRequests: 2,
+					windowMs: 60_000,
+				},
+			});
+
+			const { key: key1 } = await keysWithRateLimit.create({
+				ownerId: "user_1",
+			});
+			const { key: key2 } = await keysWithRateLimit.create({
+				ownerId: "user_2",
+			});
+
+			// Use key1 twice (hit limit)
+			await keysWithRateLimit.verify(key1);
+			await keysWithRateLimit.verify(key1);
+
+			// Third request for key1 should be blocked
+			const key1Result = await keysWithRateLimit.verify(key1);
+			expect(key1Result.valid).toBe(false);
+			expect(key1Result.errorCode).toBe("RATE_LIMIT_EXCEEDED");
+
+			// key2 should still work (separate rate limit)
+			const key2Result = await keysWithRateLimit.verify(key2);
+			expect(key2Result.valid).toBe(true);
+			expect(key2Result.rateLimit?.remaining).toBe(1);
+		});
+
+		it("should include rate limit info in successful responses", async () => {
+			const keysWithRateLimit = createKeys({
+				prefix: "sk_",
+				cache: true,
+				rateLimit: {
+					maxRequests: 10,
+					windowMs: 60_000,
+				},
+			});
+
+			const { key } = await keysWithRateLimit.create({ ownerId: "user_1" });
+			const result = await keysWithRateLimit.verify(key);
+
+			expect(result.valid).toBe(true);
+			expect(result.rateLimit).toBeDefined();
+			expect(result.rateLimit?.current).toBe(1);
+			expect(result.rateLimit?.limit).toBe(10);
+			// biome-ignore lint/style/noMagicNumbers: 9 is the remaining requests
+			expect(result.rateLimit?.remaining).toBe(9);
+			expect(result.rateLimit?.resetMs).toBeGreaterThan(0);
+			expect(result.rateLimit?.resetAt).toMatch(ISO_DATE_REGEX);
+		});
+
+		it("should rate limit from cache path", async () => {
+			const keysWithRateLimit = createKeys({
+				prefix: "sk_",
+				cache: true,
+				rateLimit: {
+					maxRequests: 2,
+					windowMs: 60_000,
+				},
+			});
+
+			const { key } = await keysWithRateLimit.create({ ownerId: "user_1" });
+
+			// First verify (cache miss)
+			const result1 = await keysWithRateLimit.verify(key);
+			expect(result1.valid).toBe(true);
+
+			// Second verify (cache hit)
+			const result2 = await keysWithRateLimit.verify(key);
+			expect(result2.valid).toBe(true);
+
+			// Third verify should be rate limited (cache hit)
+			const result3 = await keysWithRateLimit.verify(key);
+			expect(result3.valid).toBe(false);
+			expect(result3.errorCode).toBe("RATE_LIMIT_EXCEEDED");
+		});
+	});
 });

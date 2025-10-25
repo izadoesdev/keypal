@@ -38,6 +38,19 @@ export type VerifyResult = {
 	error?: string;
 	/** Error code for programmatic handling */
 	errorCode?: ApiKeyErrorCode;
+	/** Rate limit information (only included if rate limiting is enabled) */
+	rateLimit?: {
+		/** Current request count in the window */
+		current: number;
+		/** Maximum number of requests allowed within the window */
+		limit: number;
+		/** Number of requests remaining within the window */
+		remaining: number;
+		/** Time in milliseconds until the window resets */
+		resetMs: number;
+		/** ISO timestamp when the window resets */
+		resetAt: string;
+	};
 };
 
 /**
@@ -88,6 +101,7 @@ export class ApiKeyManager {
 	private readonly revokedKeyTtl: number;
 	private readonly isRedisStorage: boolean;
 	private readonly autoTrackUsage: boolean;
+	private readonly rateLimiter?: RateLimiter;
 
 	constructor(config: ConfigInput = {}) {
 		this.config = {
@@ -142,6 +156,11 @@ export class ApiKeyManager {
 			this.cache = config.cache;
 		}
 		// else: cache is false/undefined by default, no caching
+
+		// Initialize rate limiter if configured
+		if (config.rateLimit) {
+			this.rateLimiter = this.createRateLimiter(config.rateLimit);
+		}
 	}
 
 	generateKey(): string {
@@ -292,6 +311,44 @@ export class ApiKeyManager {
 						return createErrorResult(ApiKeyErrorCode.DISABLED);
 					}
 
+					// Check rate limit if enabled
+					if (this.rateLimiter) {
+						const rateLimitResult = await this.rateLimiter.check(record);
+						if (!rateLimitResult.allowed) {
+							return {
+								valid: false,
+								error: "Rate limit exceeded",
+								errorCode: ApiKeyErrorCode.RATE_LIMIT_EXCEEDED,
+								rateLimit: {
+									current: rateLimitResult.current,
+									limit: rateLimitResult.limit,
+									remaining: rateLimitResult.remaining,
+									resetMs: rateLimitResult.resetMs,
+									resetAt: rateLimitResult.resetAt,
+								},
+							};
+						}
+
+						// Track usage if enabled
+						if (this.autoTrackUsage && !options.skipTracking) {
+							this.updateLastUsed(record.id).catch((err) => {
+								logger.error("Failed to track usage:", err);
+							});
+						}
+
+						return {
+							valid: true,
+							record,
+							rateLimit: {
+								current: rateLimitResult.current,
+								limit: rateLimitResult.limit,
+								remaining: rateLimitResult.remaining,
+								resetMs: rateLimitResult.resetMs,
+								resetAt: rateLimitResult.resetAt,
+							},
+						};
+					}
+
 					// Track usage if enabled
 					if (this.autoTrackUsage && !options.skipTracking) {
 						this.updateLastUsed(record.id).catch((err) => {
@@ -333,6 +390,56 @@ export class ApiKeyManager {
 
 		if (record.metadata.enabled === false) {
 			return createErrorResult(ApiKeyErrorCode.DISABLED);
+		}
+
+		// Check rate limit if enabled
+		if (this.rateLimiter) {
+			const rateLimitResult = await this.rateLimiter.check(record);
+			if (!rateLimitResult.allowed) {
+				return {
+					valid: false,
+					error: "Rate limit exceeded",
+					errorCode: ApiKeyErrorCode.RATE_LIMIT_EXCEEDED,
+					rateLimit: {
+						current: rateLimitResult.current,
+						limit: rateLimitResult.limit,
+						remaining: rateLimitResult.remaining,
+						resetMs: rateLimitResult.resetMs,
+						resetAt: rateLimitResult.resetAt,
+					},
+				};
+			}
+
+			if (this.cache && !options.skipCache) {
+				try {
+					await this.cache.set(
+						`apikey:${keyHash}`,
+						JSON.stringify(record),
+						this.cacheTtl
+					);
+				} catch (error) {
+					logger.error("CRITICAL: Failed to write to cache:", error);
+				}
+			}
+
+			// Track usage if enabled
+			if (this.autoTrackUsage && !options.skipTracking) {
+				this.updateLastUsed(record.id).catch((err) => {
+					logger.error("Failed to track usage:", err);
+				});
+			}
+
+			return {
+				valid: true,
+				record,
+				rateLimit: {
+					current: rateLimitResult.current,
+					limit: rateLimitResult.limit,
+					remaining: rateLimitResult.remaining,
+					resetMs: rateLimitResult.resetMs,
+					resetAt: rateLimitResult.resetAt,
+				},
+			};
 		}
 
 		if (this.cache && !options.skipCache) {

@@ -5,5 +5,17 @@
     "enabled": true,
     "indentWidth": 2,
     "indentStyle": "tab"
+  },
+  "linter": {
+    "rules": {
+      "complexity": {
+        "noExcessiveCognitiveComplexity": {
+          "level": "warn",
+          "options": {
+            "maxAllowedComplexity": 50
+          }
+        }
+      }
+    }
   }
 }

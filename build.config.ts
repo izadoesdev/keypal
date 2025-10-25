@@ -17,4 +17,9 @@ export default defineBuildConfig({
 			treeShaking: true,
 		},
 	},
+	externals: [
+		"drizzle-orm",
+		"drizzle-orm/pg-core",
+		"drizzle-orm/node-postgres",
+	],
 });

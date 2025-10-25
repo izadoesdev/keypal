@@ -7,7 +7,7 @@ export default defineBuildConfig({
 		"src/storage/redis.ts",
 		"src/storage/drizzle.ts",
 		"src/storage/prisma.ts",
-		"src/drizzle/index.ts",
+		"src/drizzle/schema.ts",
 	],
 	declaration: true,
 	clean: true,

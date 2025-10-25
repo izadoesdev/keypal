@@ -15,7 +15,7 @@ import type { Storage } from "../types/storage-types";
  * @example
  * ```typescript
  * import { PrismaClient } from '@prisma/client';
- * import { PrismaStore } from 'keypal/storage/prisma';
+ * import { PrismaStore } from 'keypal/prisma';
  *
  * const prisma = new PrismaClient();
  * const store = new PrismaStore({ prisma, model: 'apiKey' });

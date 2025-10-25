@@ -207,8 +207,8 @@ const keys = createKeys({
 ```typescript
 import { drizzle } from 'drizzle-orm/node-postgres'
 import { Pool } from 'pg'
+import { DrizzleStore } from 'keypal/drizzle'
 import { apikey } from 'keypal/drizzle/schema'
-import { DrizzleStore } from 'keypal/storage/drizzle'
 import { createKeys } from 'keypal'
 
 const pool = new Pool({

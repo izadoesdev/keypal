@@ -10,6 +10,7 @@ import { index, jsonb, pgTable, text, unique } from "drizzle-orm/pg-core";
  *
  * @example
  * ```ts
+ * import { DrizzleStore } from 'keypal/drizzle'
  * import { apikey } from 'keypal/drizzle/schema'
  * import { drizzle } from 'drizzle-orm/node-postgres'
  * import { Pool } from 'pg'
@@ -17,7 +18,6 @@ import { index, jsonb, pgTable, text, unique } from "drizzle-orm/pg-core";
  * const pool = new Pool({ connectionString: process.env.DATABASE_URL })
  * const db = drizzle(pool)
  *
- * import { DrizzleStore } from 'keypal/storage/drizzle'
  * const store = new DrizzleStore({ db, table: apikey })
  * ```
  */

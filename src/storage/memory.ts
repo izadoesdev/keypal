@@ -31,13 +31,13 @@ export class MemoryStore implements Storage {
 		);
 	}
 
-	async findByTag(tag: string, ownerId?: string): Promise<ApiKeyRecord[]> {
-		return await this.findByTags([tag], ownerId);
-	}
-
-	async findByTags(tags: string[], ownerId?: string): Promise<ApiKeyRecord[]> {
+	async findByTag(
+		tag: string | string[],
+		ownerId?: string
+	): Promise<ApiKeyRecord[]> {
+		const tags = Array.isArray(tag) ? tag : [tag];
 		return Array.from(await this.keys.values()).filter((record) => {
-			if (ownerId && record.metadata.ownerId !== ownerId) {
+			if (ownerId !== undefined && record.metadata.ownerId !== ownerId) {
 				return false;
 			}
 			return tags.some((t) => record.metadata.tags?.includes(t.toLowerCase()));

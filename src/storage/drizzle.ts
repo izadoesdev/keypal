@@ -14,6 +14,18 @@ import type { Storage } from "../types/storage-types";
  * - metadata: JSONB field containing owner, scopes, and other metadata
  */
 export class DrizzleStore implements Storage {
+	/**
+	 * Helper to create SQL condition for JSONB array overlap using ?| operator
+	 * @param tags Array of tags to search for (will be lowercased)
+	 * @returns SQL condition for PostgreSQL's ?| operator
+	 */
+	private jsonbArrayOverlaps(tags: string[]): SQL {
+		const lowercasedTags = tags.map((t) => t.toLowerCase());
+		const quotedTags = lowercasedTags
+			.map((tag) => `'${tag.replace(/'/g, "''")}'`)
+			.join(",");
+		return sql`${this.table.metadata}->'tags' ?| ARRAY[${sql.raw(quotedTags)}]`;
+	}
 	private readonly db: NodePgDatabase<Record<string, PgTable>>;
 	private readonly table: typeof apikey;
 
@@ -79,19 +91,18 @@ export class DrizzleStore implements Storage {
 		return rows.map(this.toRecord);
 	}
 
-	async findByTags(tags: string[], ownerId?: string): Promise<ApiKeyRecord[]> {
-		const tagArray = tags.map((t) => t.toLowerCase());
-
+	async findByTag(
+		tag: string | string[],
+		ownerId?: string
+	): Promise<ApiKeyRecord[]> {
+		const tags = Array.isArray(tag) ? tag : [tag];
 		const conditions: SQL[] = [];
 
-		if (tagArray.length > 0) {
-			// case insensitive tag matching
-			conditions.push(
-				sql`${this.table.metadata}->'tags' ?| ARRAY[${tagArray.join(",")}]`
-			);
+		if (tags.length > 0) {
+			conditions.push(this.jsonbArrayOverlaps(tags));
 		}
 
-		if (ownerId) {
+		if (ownerId !== undefined) {
 			conditions.push(arrayContains(this.table.metadata, { ownerId }));
 		}
 
@@ -101,10 +112,6 @@ export class DrizzleStore implements Storage {
 			.where(and(...conditions));
 
 		return rows.map(this.toRecord);
-	}
-
-	async findByTag(tag: string, ownerId?: string): Promise<ApiKeyRecord[]> {
-		return await this.findByTags([tag], ownerId);
 	}
 
 	async updateMetadata(

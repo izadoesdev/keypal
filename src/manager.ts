@@ -303,11 +303,10 @@ export class ApiKeyManager {
 		return await this.storage.findById(id);
 	}
 
-	async findByTags(tags: string[], ownerId?: string): Promise<ApiKeyRecord[]> {
-		return await this.storage.findByTags(tags, ownerId);
-	}
-
-	async findByTag(tag: string, ownerId?: string): Promise<ApiKeyRecord[]> {
+	async findByTag(
+		tag: string | string[],
+		ownerId?: string
+	): Promise<ApiKeyRecord[]> {
 		return await this.storage.findByTag(tag, ownerId);
 	}
 
@@ -404,7 +403,9 @@ export class ApiKeyManager {
 			scopes: metadata?.scopes ?? oldRecord.metadata.scopes,
 			resources: metadata?.resources ?? oldRecord.metadata.resources,
 			expiresAt: metadata?.expiresAt ?? oldRecord.metadata.expiresAt,
-			tags: metadata?.tags ?? oldRecord.metadata.tags,
+			tags: metadata?.tags
+				? metadata.tags.map((t) => t.toLowerCase())
+				: oldRecord.metadata.tags,
 		});
 
 		await this.storage.updateMetadata(id, {

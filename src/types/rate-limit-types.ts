@@ -22,7 +22,7 @@ export type RateLimitResult = {
 	limit: number;
 	/** Time in milliseconds until the window resets */
 	resetMs: number;
-	/** ISO timestampt when the window resets */
+	/** ISO timestamp when the window resets */
 	resetAt: string;
 	/** Number of requests remaining within the window */
 	remaining: number;

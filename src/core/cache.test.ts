@@ -58,6 +58,50 @@ describe("MemoryCache", () => {
 		expect(cache.get("key1")).toBeNull();
 		expect(cache.get("key2")).toBe("value2");
 	});
+
+	it("should increment a non-existent key to 1", () => {
+		const result = cache.incr("counter", 60);
+		expect(result).toBe(1);
+		expect(cache.get("counter")).toBe("1");
+	});
+
+	it("should increment an existing key", () => {
+		cache.set("counter", "5", 60);
+		const result = cache.incr("counter", 60);
+		// biome-ignore lint/style/noMagicNumbers: 6 is expected incremented value
+		expect(result).toBe(6);
+		expect(cache.get("counter")).toBe("6");
+	});
+
+	it("should increment multiple times", () => {
+		expect(cache.incr("counter", 60)).toBe(1);
+		expect(cache.incr("counter", 60)).toBe(2);
+		// biome-ignore lint/style/noMagicNumbers: 3 is expected incremented value
+		expect(cache.incr("counter", 60)).toBe(3);
+		expect(cache.get("counter")).toBe("3");
+	});
+
+	it("should handle increment with TTL", async () => {
+		// biome-ignore lint/style/noMagicNumbers: 100ms
+		cache.incr("counter", 0.1);
+		expect(cache.get("counter")).toBe("1");
+
+		// biome-ignore lint/style/noMagicNumbers: 150ms
+		await new Promise((resolve) => setTimeout(resolve, 150));
+		expect(cache.get("counter")).toBeNull();
+	});
+
+	it("should not increment expired keys", async () => {
+		// biome-ignore lint/style/noMagicNumbers: 100ms
+		cache.set("counter", "5", 0.1);
+
+		// biome-ignore lint/style/noMagicNumbers: 150ms
+		await new Promise((resolve) => setTimeout(resolve, 150));
+
+		const result = cache.incr("counter", 60);
+		expect(result).toBe(1);
+		expect(cache.get("counter")).toBe("1");
+	});
 });
 
 describe("RedisCache", () => {
@@ -69,6 +113,7 @@ describe("RedisCache", () => {
 			get: vi.fn(),
 			setex: vi.fn(),
 			del: vi.fn(),
+			eval: vi.fn(),
 		};
 		cache = new RedisCache(mockRedisClient);
 	});
@@ -100,5 +145,31 @@ describe("RedisCache", () => {
 
 		const result = await cache.get("non-existent");
 		expect(result).toBeNull();
+	});
+
+	it("should call redis eval with Lua script for incr", async () => {
+		// biome-ignore lint/style/noMagicNumbers: 5 as the incremented value
+		mockRedisClient.eval.mockResolvedValue(5);
+
+		// biome-ignore lint/style/noMagicNumbers: 120 seconds
+		const result = await cache.incr("counter", 120);
+
+		// biome-ignore lint/style/noMagicNumbers: 5 as the incremented value
+		expect(result).toBe(5);
+		expect(mockRedisClient.eval).toHaveBeenCalledWith(
+			expect.stringContaining("INCR"),
+			1,
+			"counter",
+			// biome-ignore lint/style/noMagicNumbers: 120 seconds
+			120
+		);
+	});
+
+	it("should handle incr returning number", async () => {
+		mockRedisClient.eval.mockResolvedValue(1);
+
+		const result = await cache.incr("new-counter", 60);
+		expect(result).toBe(1);
+		expect(typeof result).toBe("number");
 	});
 });

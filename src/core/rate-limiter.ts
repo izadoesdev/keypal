@@ -13,6 +13,13 @@ export class RateLimiter {
 	private readonly keyPrefix: string;
 
 	constructor(cache: Cache, config: RateLimitConfig) {
+		if (config.windowMs <= 0) {
+			throw new Error("windowMs must be a positive number");
+		}
+		if (config.maxRequests <= 0) {
+			throw new Error("maxRequests must be a positive number");
+		}
+
 		this.cache = cache;
 		this.config = config;
 		this.keyPrefix = config.keyPrefix ?? "ratelimit";
@@ -46,32 +53,42 @@ export class RateLimiter {
 			this.config.windowMs / MILLISECONDS_PER_SECOND
 		);
 
-		const currentValue = await this.cache.get(key);
-		const current = currentValue ? Number.parseInt(currentValue, 10) : 0;
+		if (increment) {
+			// Use atomic increment to prevent race conditions
+			const newCount = await this.cache.incr(key, ttlSeconds);
 
-		if (current >= this.config.maxRequests) {
+			if (newCount > this.config.maxRequests) {
+				return {
+					allowed: false,
+					current: newCount,
+					limit: this.config.maxRequests,
+					resetMs,
+					resetAt: new Date(resetAt).toISOString(),
+					remaining: 0,
+				};
+			}
+
 			return {
-				allowed: false,
-				current,
+				allowed: true,
+				current: newCount,
 				limit: this.config.maxRequests,
 				resetMs,
 				resetAt: new Date(resetAt).toISOString(),
-				remaining: 0,
+				remaining: this.config.maxRequests - newCount,
 			};
 		}
 
-		const newCount = increment ? current + 1 : current;
-		if (increment) {
-			await this.cache.set(key, String(newCount), ttlSeconds);
-		}
+		// When not incrementing, just check the current value
+		const currentValue = await this.cache.get(key);
+		const current = currentValue ? Number.parseInt(currentValue, 10) : 0;
 
 		return {
-			allowed: true,
-			current: newCount,
+			allowed: current < this.config.maxRequests,
+			current,
 			limit: this.config.maxRequests,
 			resetMs,
 			resetAt: new Date(resetAt).toISOString(),
-			remaining: this.config.maxRequests - newCount,
+			remaining: Math.max(0, this.config.maxRequests - current),
 		};
 	}
 

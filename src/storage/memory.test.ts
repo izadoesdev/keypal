@@ -153,7 +153,7 @@ describe("MemoryStore", () => {
 				tags: ["test"], // Only has 'test', not 'key'
 			});
 
-			const found = await store.findByTag(["test", "key"]);
+			const found = await store.findByTags(["test", "key"]);
 			expect(found).toHaveLength(2); // Should return BOTH records (OR logic)
 			expect(found.some((r) => r.id === r1.id)).toBe(true);
 			expect(found.some((r) => r.id === r2.id)).toBe(true);
@@ -187,7 +187,7 @@ describe("MemoryStore", () => {
 				tags: ["test", "key"],
 			});
 
-			const found = await store.findByTag(["test", "key"], "user_123");
+			const found = await store.findByTags(["test", "key"], "user_123");
 			expect(found).toHaveLength(1);
 			expect(found[0]?.id).toBe(record.id);
 		});

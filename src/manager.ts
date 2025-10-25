@@ -303,10 +303,11 @@ export class ApiKeyManager {
 		return await this.storage.findById(id);
 	}
 
-	async findByTag(
-		tag: string | string[],
-		ownerId?: string
-	): Promise<ApiKeyRecord[]> {
+	async findByTags(tags: string[], ownerId?: string): Promise<ApiKeyRecord[]> {
+		return await this.storage.findByTags(tags, ownerId);
+	}
+
+	async findByTag(tag: string, ownerId?: string): Promise<ApiKeyRecord[]> {
 		return await this.storage.findByTag(tag, ownerId);
 	}
 

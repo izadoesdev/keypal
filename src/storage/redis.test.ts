@@ -270,6 +270,126 @@ describe("RedisStore", () => {
 				store.updateMetadata("non-existent", { name: "New Name" })
 			).rejects.toThrow("API key with id non-existent not found");
 		});
+
+		it("should update tag indexes when adding tags", async () => {
+			const { record } = await keys.create({
+				ownerId: "user_tag_add",
+				tags: ["tag1"],
+			});
+
+			await store.updateMetadata(record.id, {
+				tags: ["tag1", "tag2", "tag3"],
+			});
+
+			// Verify tags can be found
+			const found1 = await store.findByTag("tag1");
+			const found2 = await store.findByTag("tag2");
+			const found3 = await store.findByTag("tag3");
+
+			expect(found1.some((r) => r.id === record.id)).toBe(true);
+			expect(found2.some((r) => r.id === record.id)).toBe(true);
+			expect(found3.some((r) => r.id === record.id)).toBe(true);
+		});
+
+		it("should update tag indexes when removing tags", async () => {
+			const { record } = await keys.create({
+				ownerId: "user_tag_remove",
+				tags: ["tag1", "tag2", "tag3"],
+			});
+
+			await store.updateMetadata(record.id, {
+				tags: ["tag1"],
+			});
+
+			// Verify only tag1 still has the record
+			const found1 = await store.findByTag("tag1");
+			const found2 = await store.findByTag("tag2");
+			const found3 = await store.findByTag("tag3");
+
+			expect(found1.some((r) => r.id === record.id)).toBe(true);
+			expect(found2.some((r) => r.id === record.id)).toBe(false);
+			expect(found3.some((r) => r.id === record.id)).toBe(false);
+		});
+
+		it("should update tag indexes when clearing all tags", async () => {
+			const { record } = await keys.create({
+				ownerId: "user_tag_clear",
+				tags: ["tag1", "tag2"],
+			});
+
+			await store.updateMetadata(record.id, {
+				tags: [],
+			});
+
+			// Verify no tags have the record
+			const found1 = await store.findByTag("tag1");
+			const found2 = await store.findByTag("tag2");
+
+			expect(found1.some((r) => r.id === record.id)).toBe(false);
+			expect(found2.some((r) => r.id === record.id)).toBe(false);
+		});
+
+		it("should update tag indexes when replacing tags", async () => {
+			const { record } = await keys.create({
+				ownerId: "user_tag_replace",
+				tags: ["old1", "old2"],
+			});
+
+			await store.updateMetadata(record.id, {
+				tags: ["new1", "new2"],
+			});
+
+			// Verify old tags don't have the record
+			const foundOld1 = await store.findByTag("old1");
+			const foundOld2 = await store.findByTag("old2");
+
+			// Verify new tags have the record
+			const foundNew1 = await store.findByTag("new1");
+			const foundNew2 = await store.findByTag("new2");
+
+			expect(foundOld1.some((r) => r.id === record.id)).toBe(false);
+			expect(foundOld2.some((r) => r.id === record.id)).toBe(false);
+			expect(foundNew1.some((r) => r.id === record.id)).toBe(true);
+			expect(foundNew2.some((r) => r.id === record.id)).toBe(true);
+		});
+
+		it("should delete hash key when revoking", async () => {
+			const { record } = await keys.create({
+				ownerId: "user_revoke",
+			});
+
+			// Initially hash lookup works
+			const foundBefore = await store.findByHash(record.keyHash);
+			expect(foundBefore).not.toBeNull();
+
+			// Revoke the key
+			await store.updateMetadata(record.id, {
+				revokedAt: new Date().toISOString(),
+			});
+
+			// After revocation, hash lookup should fail
+			const foundAfter = await store.findByHash(record.keyHash);
+			expect(foundAfter).toBeNull();
+
+			// But the record itself should still exist
+			const recordById = await store.findById(record.id);
+			expect(recordById).not.toBeNull();
+			expect(recordById?.metadata.revokedAt).toBeDefined();
+		});
+
+		it("should handle case-insensitive tags", async () => {
+			const { record } = await keys.create({
+				ownerId: "user_case",
+				tags: ["TAG1", "Tag2"],
+			});
+
+			// Should find with lowercase
+			const found1 = await store.findByTag("tag1");
+			const found2 = await store.findByTag("tag2");
+
+			expect(found1.some((r) => r.id === record.id)).toBe(true);
+			expect(found2.some((r) => r.id === record.id)).toBe(true);
+		});
 	});
 
 	describe("delete", () => {
@@ -296,6 +416,48 @@ describe("RedisStore", () => {
 			expect(found).toBeNull();
 		});
 
+		it("should remove owner index when deleting", async () => {
+			const { record } = await keys.create({
+				ownerId: "user_owner_delete",
+			});
+
+			await store.delete(record.id);
+
+			// Owner should no longer have this key
+			const ownerKeys = await store.findByOwner("user_owner_delete");
+			expect(ownerKeys.some((r) => r.id === record.id)).toBe(false);
+		});
+
+		it("should remove tag indexes when deleting", async () => {
+			const { record } = await keys.create({
+				ownerId: "user_tag_delete",
+				tags: ["tag1", "tag2"],
+			});
+
+			await store.delete(record.id);
+
+			// Tags should no longer have this key
+			const found1 = await store.findByTag("tag1");
+			const found2 = await store.findByTag("tag2");
+
+			expect(found1.some((r) => r.id === record.id)).toBe(false);
+			expect(found2.some((r) => r.id === record.id)).toBe(false);
+		});
+
+		it("should be idempotent (multiple deletes don't error)", async () => {
+			const { record } = await keys.create({
+				ownerId: "user_idempotent",
+			});
+
+			await store.delete(record.id);
+			await store.delete(record.id);
+			await store.delete(record.id);
+
+			// Should not throw
+			const result = await store.findById(record.id);
+			expect(result).toBeNull();
+		});
+
 		it("should do nothing for non-existent ID", async () => {
 			await store.delete("non-existent");
 			// Should not throw
@@ -315,6 +477,61 @@ describe("RedisStore", () => {
 
 			expect(userDeleteKeys).toHaveLength(0);
 			expect(userKeepKeys).toHaveLength(1);
+		});
+
+		it("should remove all hash indexes for deleted keys", async () => {
+			const { record: record1 } = await keys.create({
+				ownerId: "user_hash_delete_all",
+			});
+			const { record: record2 } = await keys.create({
+				ownerId: "user_hash_delete_all",
+			});
+
+			await store.deleteByOwner("user_hash_delete_all");
+
+			const found1 = await store.findByHash(record1.keyHash);
+			const found2 = await store.findByHash(record2.keyHash);
+
+			expect(found1).toBeNull();
+			expect(found2).toBeNull();
+		});
+
+		it("should remove all tag indexes for deleted keys", async () => {
+			const { record: record1 } = await keys.create({
+				ownerId: "user_tag_delete_all",
+				tags: ["tag1", "tag2"],
+			});
+			const { record: record2 } = await keys.create({
+				ownerId: "user_tag_delete_all",
+				tags: ["tag2", "tag3"],
+			});
+
+			await store.deleteByOwner("user_tag_delete_all");
+
+			const found1 = await store.findByTag("tag1");
+			const found2 = await store.findByTag("tag2");
+			const found3 = await store.findByTag("tag3");
+
+			expect(found1.some((r) => r.id === record1.id)).toBe(false);
+			expect(found1.some((r) => r.id === record2.id)).toBe(false);
+			expect(found2.some((r) => r.id === record1.id)).toBe(false);
+			expect(found2.some((r) => r.id === record2.id)).toBe(false);
+			expect(found3.some((r) => r.id === record1.id)).toBe(false);
+			expect(found3.some((r) => r.id === record2.id)).toBe(false);
+		});
+
+		it("should be idempotent (multiple calls don't error)", async () => {
+			await keys.create({
+				ownerId: "user_idempotent_all",
+			});
+
+			await store.deleteByOwner("user_idempotent_all");
+			await store.deleteByOwner("user_idempotent_all");
+			await store.deleteByOwner("user_idempotent_all");
+
+			// Should not throw
+			const found = await store.findByOwner("user_idempotent_all");
+			expect(found).toHaveLength(0);
 		});
 
 		it("should do nothing for non-existent owner", async () => {
@@ -367,6 +584,87 @@ describe("RedisStore", () => {
 			// Verify the key works
 			const verifyResult = await customKeys.verify(key);
 			expect(verifyResult.valid).toBe(true);
+		});
+	});
+
+	describe("Concurrent Operations", () => {
+		it("should handle concurrent saves to different records", async () => {
+			const promises = Array.from({ length: 10 }, (_, i) =>
+				keys.create({
+					ownerId: "user_concurrent",
+					name: `Concurrent ${i}`,
+				})
+			);
+
+			await Promise.all(promises);
+
+			const found = await store.findByOwner("user_concurrent");
+			expect(found).toHaveLength(10);
+		});
+
+		it("should handle concurrent updates to different records", async () => {
+			const records = await Promise.all(
+				Array.from({ length: 5 }, (_, i) =>
+					keys.create({
+						ownerId: "user_concurrent_update_diff",
+						name: `Original ${i}`,
+					})
+				)
+			);
+
+			const promises = records.map((r, i) =>
+				store.updateMetadata(r.record.id, {
+					name: `Updated ${i}`,
+				})
+			);
+
+			await Promise.all(promises);
+
+			for (let i = 0; i < records.length; i++) {
+				const record = records.at(i);
+				if (!record) {
+					continue;
+				}
+				const found = await store.findById(record.record.id);
+				expect(found?.metadata.name).toBe(`Updated ${i}`);
+			}
+		});
+
+		it("should handle concurrent deletes", async () => {
+			const promises = Array.from({ length: 10 }, (_, i) =>
+				keys.create({
+					ownerId: "user_concurrent_delete",
+					name: `Delete ${i}`,
+				})
+			);
+
+			const results = await Promise.all(promises);
+			const deletePromises = results.map((r) => store.delete(r.record.id));
+			await Promise.all(deletePromises);
+
+			const found = await store.findByOwner("user_concurrent_delete");
+			expect(found).toHaveLength(0);
+		});
+
+		it("should handle concurrent tag updates", async () => {
+			const { record } = await keys.create({
+				ownerId: "user_concurrent_tags",
+				tags: ["original"],
+			});
+
+			// Try to update tags concurrently
+			const promises = [
+				store.updateMetadata(record.id, { tags: ["tag1"] }),
+				store.updateMetadata(record.id, { tags: ["tag2"] }),
+				store.updateMetadata(record.id, { tags: ["tag3"] }),
+			];
+
+			await Promise.all(promises);
+
+			// Should end up with one of the tags
+			const found = await store.findById(record.id);
+			expect(found?.metadata.tags).toBeDefined();
+			expect(Array.isArray(found?.metadata.tags)).toBe(true);
 		});
 	});
 });

@@ -5,11 +5,11 @@ export class MemoryStore implements Storage {
 	private readonly keys: Map<string, ApiKeyRecord> = new Map();
 
 	async save(record: ApiKeyRecord): Promise<void> {
-		const existing = await this.keys.get(record.id);
+		const existing = await this.findById(record.id);
 		if (existing) {
 			throw new Error(`API key with id ${record.id} already exists`);
 		}
-		this.keys.set(record.id, record);
+		await this.keys.set(record.id, record);
 	}
 
 	async findByHash(keyHash: string): Promise<ApiKeyRecord | null> {
@@ -60,9 +60,9 @@ export class MemoryStore implements Storage {
 	}
 
 	async deleteByOwner(ownerId: string): Promise<void> {
-		for (const [id, record] of this.keys.entries()) {
+		for (const [id, record] of await this.keys.entries()) {
 			if (record.metadata.ownerId === ownerId) {
-				await this.keys.delete(id);
+				this.keys.delete(id);
 			}
 		}
 	}

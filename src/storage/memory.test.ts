@@ -259,6 +259,20 @@ describe("MemoryStore", () => {
 			expect(found).toBeNull();
 		});
 
+		it("should be idempotent (multiple deletes don't error)", async () => {
+			const { record } = await keys.create({
+				ownerId: "user_idempotent",
+			});
+
+			await store.delete(record.id);
+			await store.delete(record.id);
+			await store.delete(record.id);
+
+			// Should not throw
+			const result = await store.findById(record.id);
+			expect(result).toBeNull();
+		});
+
 		it("should do nothing for non-existent ID", async () => {
 			await store.delete("non-existent");
 			// Should not throw
@@ -280,9 +294,63 @@ describe("MemoryStore", () => {
 			expect(userKeepKeys).toHaveLength(1);
 		});
 
+		it("should be idempotent (multiple calls don't error)", async () => {
+			await keys.create({
+				ownerId: "user_idempotent_all",
+			});
+
+			await store.deleteByOwner("user_idempotent_all");
+			await store.deleteByOwner("user_idempotent_all");
+			await store.deleteByOwner("user_idempotent_all");
+
+			// Should not throw
+			const found = await store.findByOwner("user_idempotent_all");
+			expect(found).toHaveLength(0);
+		});
+
 		it("should do nothing for non-existent owner", async () => {
 			await store.deleteByOwner("non-existent");
 			// Should not throw
+		});
+	});
+
+	describe("Edge Cases", () => {
+		it("should handle empty tags array", async () => {
+			const { record } = await keys.create({
+				ownerId: "user_empty_tags",
+				tags: [],
+			});
+
+			const found = await store.findById(record.id);
+			expect(found?.metadata.tags).toEqual([]);
+		});
+
+		it("should handle undefined vs empty tags array", async () => {
+			const { record: r1 } = await keys.create({
+				ownerId: "user_no_tags_1",
+			});
+
+			const { record: r2 } = await keys.create({
+				ownerId: "user_no_tags_2",
+				tags: [],
+			});
+
+			const found1 = await store.findById(r1.id);
+			const found2 = await store.findById(r2.id);
+
+			// Both should handle tags gracefully
+			expect(found1).not.toBeNull();
+			expect(found2).not.toBeNull();
+		});
+
+		it("should handle keys with no metadata fields", async () => {
+			const { record } = await keys.create({
+				ownerId: "user_minimal",
+			});
+
+			const found = await store.findById(record.id);
+			expect(found).not.toBeNull();
+			expect(found?.metadata.ownerId).toBe("user_minimal");
 		});
 	});
 });

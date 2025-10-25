@@ -26,7 +26,11 @@ import type {
 	AuditLogStats,
 } from "./types/audit-log-types";
 import type { Config, ConfigInput } from "./types/config-types";
-import { ApiKeyErrorCode, createErrorResult } from "./types/error-types";
+import {
+	ApiKeyErrorCode,
+	createApiKeyError,
+	createErrorResult,
+} from "./types/error-types";
 import type { PermissionScope } from "./types/permissions-types";
 import type { Storage } from "./types/storage-types";
 import { logger } from "./utils/logger";
@@ -453,7 +457,12 @@ export class ApiKeyManager {
 	async revoke(id: string, context?: ActionContext): Promise<void> {
 		const record = await this.findById(id);
 		if (!record) {
-			return;
+			throw createApiKeyError(ApiKeyErrorCode.KEY_NOT_FOUND);
+		}
+
+		// Check if already revoked
+		if (record.metadata.revokedAt) {
+			throw createApiKeyError(ApiKeyErrorCode.ALREADY_REVOKED);
 		}
 
 		await this.storage.updateMetadata(id, {
@@ -491,7 +500,17 @@ export class ApiKeyManager {
 	async enable(id: string, context?: ActionContext): Promise<void> {
 		const record = await this.findById(id);
 		if (!record) {
-			throw new Error("API key not found");
+			throw createApiKeyError(ApiKeyErrorCode.KEY_NOT_FOUND);
+		}
+
+		// Check if key is revoked
+		if (record.metadata.revokedAt) {
+			throw createApiKeyError(ApiKeyErrorCode.CANNOT_MODIFY_REVOKED);
+		}
+
+		// Check if already enabled
+		if (record.metadata.enabled) {
+			throw createApiKeyError(ApiKeyErrorCode.ALREADY_ENABLED);
 		}
 
 		await this.storage.updateMetadata(id, {
@@ -513,7 +532,17 @@ export class ApiKeyManager {
 	async disable(id: string, context?: ActionContext): Promise<void> {
 		const record = await this.findById(id);
 		if (!record) {
-			throw new Error("API key not found");
+			throw createApiKeyError(ApiKeyErrorCode.KEY_NOT_FOUND);
+		}
+
+		// Check if key is revoked
+		if (record.metadata.revokedAt) {
+			throw createApiKeyError(ApiKeyErrorCode.CANNOT_MODIFY_REVOKED);
+		}
+
+		// Check if already disabled
+		if (!record.metadata.enabled) {
+			throw createApiKeyError(ApiKeyErrorCode.ALREADY_DISABLED);
 		}
 
 		await this.storage.updateMetadata(id, {
@@ -539,7 +568,12 @@ export class ApiKeyManager {
 	): Promise<{ key: string; record: ApiKeyRecord; oldRecord: ApiKeyRecord }> {
 		const oldRecord = await this.findById(id);
 		if (!oldRecord) {
-			throw new Error("API key not found");
+			throw createApiKeyError(ApiKeyErrorCode.KEY_NOT_FOUND);
+		}
+
+		// Check if key is already revoked
+		if (oldRecord.metadata.revokedAt) {
+			throw createApiKeyError(ApiKeyErrorCode.CANNOT_MODIFY_REVOKED);
 		}
 
 		const { key, record: newRecord } = await this.create({
@@ -658,11 +692,11 @@ export class ApiKeyManager {
 	 */
 	async getLogs(query: AuditLogQuery = {}): Promise<AuditLog[]> {
 		if (!this.auditLogsEnabled) {
-			throw new Error("Audit logging is not enabled");
+			throw createApiKeyError(ApiKeyErrorCode.AUDIT_LOGGING_DISABLED);
 		}
 
 		if (!this.storage.findLogs) {
-			throw new Error("Storage does not support audit logging");
+			throw createApiKeyError(ApiKeyErrorCode.STORAGE_NOT_SUPPORTED);
 		}
 
 		return await this.storage.findLogs(query);
@@ -681,11 +715,11 @@ export class ApiKeyManager {
 	 */
 	async countLogs(query: AuditLogQuery = {}): Promise<number> {
 		if (!this.auditLogsEnabled) {
-			throw new Error("Audit logging is not enabled");
+			throw createApiKeyError(ApiKeyErrorCode.AUDIT_LOGGING_DISABLED);
 		}
 
 		if (!this.storage.countLogs) {
-			throw new Error("Storage does not support audit logging");
+			throw createApiKeyError(ApiKeyErrorCode.STORAGE_NOT_SUPPORTED);
 		}
 
 		return await this.storage.countLogs(query);
@@ -707,11 +741,11 @@ export class ApiKeyManager {
 	 */
 	async deleteLogs(query: AuditLogQuery): Promise<number> {
 		if (!this.auditLogsEnabled) {
-			throw new Error("Audit logging is not enabled");
+			throw createApiKeyError(ApiKeyErrorCode.AUDIT_LOGGING_DISABLED);
 		}
 
 		if (!this.storage.deleteLogs) {
-			throw new Error("Storage does not support audit logging");
+			throw createApiKeyError(ApiKeyErrorCode.STORAGE_NOT_SUPPORTED);
 		}
 
 		return await this.storage.deleteLogs(query);
@@ -747,11 +781,11 @@ export class ApiKeyManager {
 	 */
 	async getLogStats(ownerId: string): Promise<AuditLogStats> {
 		if (!this.auditLogsEnabled) {
-			throw new Error("Audit logging is not enabled");
+			throw createApiKeyError(ApiKeyErrorCode.AUDIT_LOGGING_DISABLED);
 		}
 
 		if (!this.storage.getLogStats) {
-			throw new Error("Storage does not support audit logging");
+			throw createApiKeyError(ApiKeyErrorCode.STORAGE_NOT_SUPPORTED);
 		}
 
 		return await this.storage.getLogStats(ownerId);

@@ -77,7 +77,7 @@
     "prepublishOnly": "bun run build"
   },
   "devDependencies": {
-    "@biomejs/biome": "2.2.6",
+    "@biomejs/biome": "^2.3.0",
     "@hono/node-server": "^1.19.5",
     "@types/bun": "latest",
     "@types/pg": "^8.15.5",
@@ -91,7 +91,7 @@
     "mitata": "^1.0.34",
     "pg": "^8.16.3",
     "prisma": "^6.18.0",
-    "ultracite": "5.6.4",
+    "ultracite": "^6.0.1",
     "unbuild": "^3.6.1",
     "undici": "^7.16.0",
     "vitest": "^4.0.3"

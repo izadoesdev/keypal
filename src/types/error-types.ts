@@ -25,6 +25,27 @@ export const ApiKeyErrorCode = {
 
 	/** Cache error occurred */
 	CACHE_ERROR: "CACHE_ERROR",
+
+	/** API key is already revoked */
+	ALREADY_REVOKED: "ALREADY_REVOKED",
+
+	/** API key is already enabled */
+	ALREADY_ENABLED: "ALREADY_ENABLED",
+
+	/** API key is already disabled */
+	ALREADY_DISABLED: "ALREADY_DISABLED",
+
+	/** Cannot perform operation on revoked key */
+	CANNOT_MODIFY_REVOKED: "CANNOT_MODIFY_REVOKED",
+
+	/** API key not found */
+	KEY_NOT_FOUND: "KEY_NOT_FOUND",
+
+	/** Audit logging is not enabled */
+	AUDIT_LOGGING_DISABLED: "AUDIT_LOGGING_DISABLED",
+
+	/** Storage does not support this operation */
+	STORAGE_NOT_SUPPORTED: "STORAGE_NOT_SUPPORTED",
 } as const;
 
 export type ApiKeyErrorCode =
@@ -42,6 +63,14 @@ export const ApiKeyErrorMessages: Record<ApiKeyErrorCode, string> = {
 	[ApiKeyErrorCode.DISABLED]: "API key is disabled",
 	[ApiKeyErrorCode.STORAGE_ERROR]: "Storage error occurred",
 	[ApiKeyErrorCode.CACHE_ERROR]: "Cache error occurred",
+	[ApiKeyErrorCode.ALREADY_REVOKED]: "API key is already revoked",
+	[ApiKeyErrorCode.ALREADY_ENABLED]: "API key is already enabled",
+	[ApiKeyErrorCode.ALREADY_DISABLED]: "API key is already disabled",
+	[ApiKeyErrorCode.CANNOT_MODIFY_REVOKED]: "Cannot modify a revoked key",
+	[ApiKeyErrorCode.KEY_NOT_FOUND]: "API key not found",
+	[ApiKeyErrorCode.AUDIT_LOGGING_DISABLED]: "Audit logging is not enabled",
+	[ApiKeyErrorCode.STORAGE_NOT_SUPPORTED]:
+		"Storage does not support this operation",
 };
 
 /**

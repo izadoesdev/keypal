@@ -64,8 +64,8 @@ class Logger {
 	}
 }
 
-export const logger = createLogger({ prefix: "keypal" });
-
 export function createLogger(options: LoggerOptions): Logger {
 	return new Logger(options);
 }
+
+export const logger = createLogger({ prefix: "keypal" });

@@ -205,7 +205,7 @@ const result = await keys.verify(headers, { skipTracking: true });
 
 ### Rate Limiting
 
-Protect your API from abuse with built-in rate limiting. Uses the same cache infrastructure (memory or Redis) for high-performance request tracking.
+Protect your API from abuse with built-in rate limiting. Uses the same cache infrastructure (memory or Redis) for high-performance request tracking. Windows are aligned to epoch time for consistent behavior in distributed systems.
 
 **Note:** Cache must be enabled to use rate limiting.
 
@@ -277,7 +277,7 @@ app.use("/api/*", async (c, next) => {
 });
 ```
 
-#### Manual Rate Limiting (Advanced)
+#### Manual Rate Limiting (advanced)
 
 For custom rate limiting scenarios (e.g., different limits per endpoint), create rate limiters manually:
 

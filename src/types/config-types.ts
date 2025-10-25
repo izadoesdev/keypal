@@ -123,7 +123,7 @@ export type ConfigInput = {
 	/**
 	 * Rate limit configuration for verify calls
 	 * When enabled, each verify() call will be rate-limited based on the API key
-	 * Requires cache to be enabled
+	 * Requires cache to be enabled (cache: true | 'redis' | Cache instance)
 	 * @default undefined (no rate limiting)
 	 * @example { maxRequests: 100, windowMs: 60000 } // 100 requests per minute
 	 */

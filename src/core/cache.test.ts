@@ -1,3 +1,4 @@
+import Redis from "ioredis";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryCache, RedisCache } from "./cache";
 
@@ -105,58 +106,77 @@ describe("MemoryCache", () => {
 });
 
 describe("RedisCache", () => {
-	let mockRedisClient: any;
+	let redis: Redis;
 	let cache: RedisCache;
 
-	beforeEach(() => {
-		mockRedisClient = {
-			get: vi.fn(),
-			setex: vi.fn(),
-			del: vi.fn(),
-			eval: vi.fn(),
-		};
-		cache = new RedisCache(mockRedisClient);
+	beforeEach(async () => {
+		redis = new Redis({
+			host: process.env.REDIS_HOST || "localhost",
+			port: Number.parseInt(process.env.REDIS_PORT || "6379", 10),
+			db: 15, // Use test database
+			connectTimeout: 2000,
+			retryStrategy: () => null, // Don't retry
+			lazyConnect: true,
+			enableReadyCheck: false,
+			maxRetriesPerRequest: 1,
+		});
+
+		try {
+			await redis.connect();
+			// Ping to verify connection
+			await redis.ping();
+		} catch (error) {
+			console.warn(
+				"Redis not available. Skipping Redis tests. Start with: bun run redis:up"
+			);
+			throw error;
+		}
+
+		cache = new RedisCache(redis);
 	});
 
 	it("should call redis get", async () => {
-		mockRedisClient.get.mockResolvedValue("value1");
+		await redis.set("key1", "value1");
+		const spyRedisGet = vi.spyOn(redis, "get");
 
 		const result = await cache.get("key1");
 		expect(result).toBe("value1");
-		expect(mockRedisClient.get).toHaveBeenCalledWith("key1");
+
+		expect(spyRedisGet).toHaveBeenCalledWith("key1");
 	});
 
 	it("should call redis setex with TTL", async () => {
+		const spyRedisSetex = vi.spyOn(redis, "setex");
+
 		// biome-ignore lint/style/noMagicNumbers: 120 seconds
 		await cache.set("key1", "value1", 120);
 
 		// biome-ignore lint/style/noMagicNumbers: 120 seconds
-		expect(mockRedisClient.setex).toHaveBeenCalledWith("key1", 120, "value1");
+		expect(spyRedisSetex).toHaveBeenCalledWith("key1", 120, "value1");
 	});
 
 	it("should call redis del", async () => {
+		const spyRedisDel = vi.spyOn(redis, "del");
 		await cache.del("key1");
 
-		expect(mockRedisClient.del).toHaveBeenCalledWith("key1");
+		expect(spyRedisDel).toHaveBeenCalledWith("key1");
 	});
 
 	it("should return null for non-existent keys", async () => {
-		mockRedisClient.get.mockResolvedValue(null);
-
 		const result = await cache.get("non-existent");
 		expect(result).toBeNull();
 	});
 
 	it("should call redis eval with Lua script for incr", async () => {
-		// biome-ignore lint/style/noMagicNumbers: 5 as the incremented value
-		mockRedisClient.eval.mockResolvedValue(5);
+		const spyRedisEval = vi.spyOn(redis, "eval");
+		await redis.set("counter", "4");
 
 		// biome-ignore lint/style/noMagicNumbers: 120 seconds
 		const result = await cache.incr("counter", 120);
 
 		// biome-ignore lint/style/noMagicNumbers: 5 as the incremented value
 		expect(result).toBe(5);
-		expect(mockRedisClient.eval).toHaveBeenCalledWith(
+		expect(spyRedisEval).toHaveBeenCalledWith(
 			expect.stringContaining("INCR"),
 			1,
 			"counter",
@@ -166,7 +186,7 @@ describe("RedisCache", () => {
 	});
 
 	it("should handle incr returning number", async () => {
-		mockRedisClient.eval.mockResolvedValue(1);
+		await redis.set("new-counter", "0");
 
 		const result = await cache.incr("new-counter", 60);
 		expect(result).toBe(1);

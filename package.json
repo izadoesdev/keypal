@@ -1,6 +1,6 @@
 {
   "name": "keypal",
-  "version": "0.0.00",
+  "version": "0.0.2",
   "description": "A TypeScript library for secure API key management with cryptographic hashing, expiration, scopes, and pluggable storage",
   "type": "module",
   "main": "./dist/index.cjs",
@@ -106,6 +106,7 @@
     "@prisma/client": "^6.18.0"
   },
   "dependencies": {
+    "convex": "^1.28.0",
     "nanoid": "^5.1.6",
     "typebox": "^1.0.43"
   },

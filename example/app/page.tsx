@@ -13,7 +13,7 @@ export default function Home() {
 						</p>
 					</div>
 
-					<div className="grid gap-4 md:grid-cols-2">
+					<div className="grid gap-4 md:grid-cols-3">
 						<a
 							className="group rounded-xl border border-zinc-200 bg-zinc-50 p-6 transition-all hover:border-zinc-300 hover:shadow-md dark:border-zinc-800 dark:bg-zinc-800/50 dark:hover:border-zinc-700"
 							href="/sandbox"
@@ -28,15 +28,27 @@ export default function Home() {
 
 						<a
 							className="group rounded-xl border border-zinc-200 bg-zinc-50 p-6 transition-all hover:border-zinc-300 hover:shadow-md dark:border-zinc-800 dark:bg-zinc-800/50 dark:hover:border-zinc-700"
-							href="https://github.com/izadoesdev/keypal"
-							rel="noopener noreferrer"
-							target="_blank"
+							href="/docs"
 						>
 							<h2 className="mb-2 font-semibold text-xl text-zinc-900 dark:text-zinc-50">
 								Documentation
 							</h2>
 							<p className="text-sm text-zinc-600 dark:text-zinc-400">
 								Read the full API documentation and guides
+							</p>
+						</a>
+
+						<a
+							className="group rounded-xl border border-zinc-200 bg-zinc-50 p-6 transition-all hover:border-zinc-300 hover:shadow-md dark:border-zinc-800 dark:bg-zinc-800/50 dark:hover:border-zinc-700"
+							href="https://github.com/izadoesdev/keypal"
+							rel="noopener noreferrer"
+							target="_blank"
+						>
+							<h2 className="mb-2 font-semibold text-xl text-zinc-900 dark:text-zinc-50">
+								GitHub
+							</h2>
+							<p className="text-sm text-zinc-600 dark:text-zinc-400">
+								View the source code and contribute
 							</p>
 						</a>
 					</div>

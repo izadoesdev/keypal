@@ -1,13 +1,5 @@
 # Suggested Additional Features
 
-## Currently Implemented
-- ✅ Custom alphabet for key generation
-- ✅ Salt for hashing
-- ✅ Update last used timestamp
-- ✅ Key tags/labels
-- ✅ Rate limiting (opt-in)
-- ✅ Audit logging (opt-in)
-
 ## Recommended Additions
 
 ### 1. Key Rotation
@@ -90,40 +82,28 @@ const { key } = await keys.createFromTemplate('readonly', {
 })
 ```
 
-### 8. Audit Logging
-```typescript
-interface AuditLog {
-  action: 'created' | 'verified' | 'revoked' | 'updated'
-  keyId: string
-  ownerId: string
-  timestamp: string
-  metadata: Record<string, any>
-}
-
-const logs = await keys.getAuditLogs({
-  keyId: 'key_123',
-  startDate: '2025-01-01',
-  endDate: '2025-12-31',
-})
-```
-
 ## Priority Recommendations
 
 **High Priority:**
-- ~~Rate limiting (security)~~ ✅
-- ~~Update last used timestamp~~ ✅ (already added)
-- ~~Audit logging~~ ✅ (already added)
+1. Rate limiting (security)
 
 **Medium Priority:**
-- Key rotation (security best practice)
-- IP whitelisting (additional security layer)
-- Usage analytics (insights)
+2. IP whitelisting (additional security layer)
+3. Usage analytics (insights)
 
 **Low Priority:**
-- Webhook events (automation)
-- Request signing (advanced security)
-- Key templates (convenience)
-- Bulk operations (efficiency)
+4. Request signing (advanced security)
+5. Key templates (convenience)
+6. Bulk operations (efficiency)
+
+## Completed Features ✅
+- Custom alphabet for key generation
+- Salt for hashing
+- Update last used timestamp
+- Key tags/labels
+- Audit logging (opt-in)
+- Key rotation
+- Rate limiting (opt-in)
 
 ## Implementation Notes
 

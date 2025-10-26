@@ -50,6 +50,16 @@ export type VerifyResult = {
 };
 
 /**
+ * Minimal record stored in cache to reduce exposure
+ */
+interface CacheRecord {
+	id: string;
+	expiresAt: string | null;
+	revokedAt: string | null;
+	enabled: boolean;
+}
+
+/**
  * Options for verifying API keys
  */
 export type VerifyOptions = {
@@ -101,13 +111,16 @@ export class ApiKeyManager {
 	private readonly defaultContext?: ActionContext;
 
 	constructor(config: ConfigInput = {}) {
+
+		const salt = config.salt ? hashKey(config.salt, { algorithm: "sha256" }) : "";
+		
 		this.config = {
 			prefix: config.prefix,
 			// biome-ignore lint/style/noMagicNumbers: 32 characters default
 			length: config.length ?? 32,
 			algorithm: config.algorithm ?? "sha256",
 			alphabet: config.alphabet,
-			salt: config.salt,
+			salt
 		};
 
 		// biome-ignore lint/style/noMagicNumbers: 7 days default (604800 seconds)
@@ -289,7 +302,27 @@ export class ApiKeyManager {
 			const cached = await this.cache.get(`apikey:${keyHash}`);
 			if (cached) {
 				try {
-					const record = JSON.parse(cached) as ApiKeyRecord;
+					const cacheData = JSON.parse(cached) as CacheRecord;
+
+					if (cacheData.expiresAt && isExpired(cacheData.expiresAt)) {
+						await this.cache.del(`apikey:${keyHash}`);
+						return createErrorResult(ApiKeyErrorCode.EXPIRED);
+					}
+
+					if (cacheData.revokedAt) {
+						await this.cache.del(`apikey:${keyHash}`);
+						return createErrorResult(ApiKeyErrorCode.REVOKED);
+					}
+
+					if (cacheData.enabled === false) {
+						return createErrorResult(ApiKeyErrorCode.DISABLED);
+					}
+
+					const record = await this.storage.findById(cacheData.id);
+					if (!record) {
+						await this.cache.del(`apikey:${keyHash}`);
+						return createErrorResult(ApiKeyErrorCode.INVALID_KEY);
+					}
 
 					if (isExpired(record.metadata.expiresAt)) {
 						await this.cache.del(`apikey:${keyHash}`);
@@ -301,11 +334,6 @@ export class ApiKeyManager {
 						return createErrorResult(ApiKeyErrorCode.REVOKED);
 					}
 
-					if (record.metadata.enabled === false) {
-						return createErrorResult(ApiKeyErrorCode.DISABLED);
-					}
-
-					// Track usage if enabled
 					if (this.autoTrackUsage && !options.skipTracking) {
 						this.updateLastUsed(record.id).catch((err) => {
 							logger.error("Failed to track usage:", err);
@@ -350,9 +378,15 @@ export class ApiKeyManager {
 
 		if (this.cache && !options.skipCache) {
 			try {
+				const cacheRecord: CacheRecord = {
+					id: record.id,
+					expiresAt: record.metadata.expiresAt ?? null,
+					revokedAt: record.metadata.revokedAt ?? null,
+					enabled: record.metadata.enabled ?? true,
+				};
 				await this.cache.set(
 					`apikey:${keyHash}`,
-					JSON.stringify(record),
+					JSON.stringify(cacheRecord),
 					this.cacheTtl
 				);
 			} catch (error) {

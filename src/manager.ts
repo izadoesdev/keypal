@@ -409,6 +409,19 @@ export class ApiKeyManager {
 
 		// Check rate limit if enabled
 		if (this.rateLimiter) {
+			// Cache the record first so subsequent requests can use the cache path
+			if (this.cache && !options.skipCache) {
+				try {
+					await this.cache.set(
+						`apikey:${keyHash}`,
+						JSON.stringify(record),
+						this.cacheTtl
+					);
+				} catch (error) {
+					logger.error("CRITICAL: Failed to write to cache:", error);
+				}
+			}
+
 			const rateLimitResult = await this.rateLimiter.check(record);
 			if (!rateLimitResult.allowed) {
 				return {
@@ -423,18 +436,6 @@ export class ApiKeyManager {
 						resetAt: rateLimitResult.resetAt,
 					},
 				};
-			}
-
-			if (this.cache && !options.skipCache) {
-				try {
-					await this.cache.set(
-						`apikey:${keyHash}`,
-						JSON.stringify(record),
-						this.cacheTtl
-					);
-				} catch (error) {
-					logger.error("CRITICAL: Failed to write to cache:", error);
-				}
 			}
 
 			// Track usage if enabled

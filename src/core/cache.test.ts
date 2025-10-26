@@ -1,5 +1,13 @@
 import Redis from "ioredis";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import {
+	afterAll,
+	beforeAll,
+	beforeEach,
+	describe,
+	expect,
+	it,
+	vi,
+} from "vitest";
 import { MemoryCache, RedisCache } from "./cache";
 
 describe("MemoryCache", () => {
@@ -109,7 +117,7 @@ describe("RedisCache", () => {
 	let redis: Redis;
 	let cache: RedisCache;
 
-	beforeEach(async () => {
+	beforeAll(async () => {
 		redis = new Redis({
 			host: process.env.REDIS_HOST || "localhost",
 			port: Number.parseInt(process.env.REDIS_PORT || "6379", 10),
@@ -131,8 +139,17 @@ describe("RedisCache", () => {
 			);
 			throw error;
 		}
+	});
 
+	beforeEach(async () => {
+		await redis.flushdb();
 		cache = new RedisCache(redis);
+		vi.restoreAllMocks();
+	});
+
+	afterAll(async () => {
+		await redis.flushdb();
+		await redis.quit();
 	});
 
 	it("should call redis get", async () => {

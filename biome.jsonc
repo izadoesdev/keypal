@@ -1,21 +1,45 @@
 {
-  "$schema": "./node_modules/@biomejs/biome/configuration_schema.json",
-  "extends": ["ultracite"],
-  "formatter": {
-    "enabled": true,
-    "indentWidth": 2,
-    "indentStyle": "tab"
-  },
-  "linter": {
-    "rules": {
-      "complexity": {
-        "noExcessiveCognitiveComplexity": {
-          "level": "warn",
-          "options": {
-            "maxAllowedComplexity": 50
-          }
-        }
-      }
-    }
-  }
+	"$schema": "./node_modules/@biomejs/biome/configuration_schema.json",
+	"extends": ["ultracite"],
+	"files": {
+		"includes": ["!benchmark.ts"]
+	},
+	"formatter": {
+		"enabled": true,
+		"indentWidth": 2,
+		"indentStyle": "tab"
+	},
+	"linter": {
+		"rules": {
+			"complexity": {
+				"noExcessiveCognitiveComplexity": {
+					"level": "warn",
+					"options": {
+						"maxAllowedComplexity": 50
+					}
+				}
+			}
+		}
+	},
+	"overrides": [
+		{
+			"linter": {
+				"rules": {
+					"suspicious": {
+						"noConsole": "off",
+						"noExplicitAny": "off"
+					},
+					"style": {
+						"noMagicNumbers": "off"
+					},
+					"complexity": {
+						"useLiteralKeys": "off"
+					},
+					"correctness": {
+						"noUnusedVariables": "off"
+					}
+				}
+			}
+		}
+	]
 }

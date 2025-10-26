@@ -147,18 +147,19 @@ export function hasAllScopesWithResources(
 		return true;
 	}
 
+	// Check resource-specific scopes
 	if (options?.resource && resources) {
 		const resourceScopes = resources[options.resource];
-		if (
-			resourceScopes &&
-			requiredScopes.every((scope) => resourceScopes.includes(scope))
-		) {
+		if (!resourceScopes) {
+			return false;
+		}
+
+		// Check if all in resource scopes
+		if (requiredScopes.every((scope) => resourceScopes.includes(scope))) {
 			return true;
 		}
-	}
 
-	if (options?.resource && resources) {
-		const resourceScopes = resources[options.resource] || [];
+		// Check combined (global + resource)
 		const combinedScopes = [...(globalScopes || []), ...resourceScopes];
 		return requiredScopes.every((scope) => combinedScopes.includes(scope));
 	}

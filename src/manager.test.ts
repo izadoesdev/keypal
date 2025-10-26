@@ -827,7 +827,7 @@ describe("ApiKeyManager - Additional Operations", () => {
 			await keysWithErrorCache.verify(key);
 
 			// All operations should succeed even if cache fails
-			await keysWithErrorCache.revoke(record.id);
+			await keysWithErrorCache.disable(record.id);
 			await keysWithErrorCache.enable(record.id);
 			await keysWithErrorCache.disable(record.id);
 			const rotateResult = await keysWithErrorCache.rotate(record.id);
@@ -937,13 +937,13 @@ describe("ApiKeyManager - Audit Logging", () => {
 			expect(logs[0]?.action).toBe("created");
 			expect(logs[0]?.data?.userId).toBe("admin_123");
 
-			// Revoke
-			await keys.revoke(record.id, {
-				userId: "admin_456",
-				metadata: { reason: "Security breach" },
+			// Disable
+			await keys.disable(record.id, { userId: "admin_111" });
+			const disabledLogs = await keys.getLogs({
+				keyId: record.id,
+				action: "disabled",
 			});
-			const logs2 = await keys.getLogs({ keyId: record.id });
-			expect(logs2[1]?.action).toBe("revoked");
+			expect(disabledLogs[0]?.action).toBe("disabled");
 
 			// Enable
 			await keys.enable(record.id, { userId: "admin_789" });
@@ -953,16 +953,8 @@ describe("ApiKeyManager - Audit Logging", () => {
 			});
 			expect(enabledLogs[0]?.action).toBe("enabled");
 
-			// Disable
-			await keys.disable(record.id, { userId: "admin_111" });
-			const disabledLogs = await keys.getLogs({
-				keyId: record.id,
-				action: "disabled",
-			});
-			expect(disabledLogs[0]?.action).toBe("disabled");
-
 			// Rotate
-			await keys.rotate(record.id, undefined, {
+			const rotateResult = await keys.rotate(record.id, undefined, {
 				userId: "admin_222",
 				metadata: { reason: "Scheduled rotation" },
 			});
@@ -972,6 +964,17 @@ describe("ApiKeyManager - Audit Logging", () => {
 			});
 			expect(rotatedLogs[0]?.action).toBe("rotated");
 			expect(rotatedLogs[0]?.data?.metadata).toHaveProperty("rotatedTo");
+
+			// Revoke the new rotated key
+			await keys.revoke(rotateResult.record.id, {
+				userId: "admin_456",
+				metadata: { reason: "Security breach" },
+			});
+			const revokedLogs = await keys.getLogs({
+				keyId: rotateResult.record.id,
+				action: "revoked",
+			});
+			expect(revokedLogs[0]?.action).toBe("revoked");
 		});
 	});
 
@@ -1076,8 +1079,9 @@ describe("ApiKeyManager - Audit Logging", () => {
 
 		it("should query logs by action", async () => {
 			const { record } = await keys.create({ ownerId: "user_1" });
-			await keys.revoke(record.id);
+			await keys.disable(record.id);
 			await keys.enable(record.id);
+			await keys.revoke(record.id);
 
 			const revokedLogs = await keys.getLogs({ action: "revoked" });
 			expect(revokedLogs.length).toBe(1);
@@ -1247,7 +1251,7 @@ describe("ApiKeyManager - Audit Logging", () => {
 		it("should clear all logs for a specific key", async () => {
 			const expectedLogs = 3;
 			const { record } = await keys.create({ ownerId: "user_1" });
-			await keys.revoke(record.id);
+			await keys.disable(record.id);
 			await keys.enable(record.id);
 
 			const deleted = await keys.clearLogs(record.id);
@@ -1288,13 +1292,15 @@ describe("ApiKeyManager - Audit Logging", () => {
 
 		it("should return count by action", async () => {
 			const { record } = await keys.create({ ownerId: "user_1" });
-			await keys.revoke(record.id);
+			await keys.disable(record.id);
 			await keys.enable(record.id);
+			await keys.revoke(record.id);
 
 			const stats = await keys.getLogStats("user_1");
 			expect(stats.byAction.created).toBe(1);
-			expect(stats.byAction.revoked).toBe(1);
+			expect(stats.byAction.disabled).toBe(1);
 			expect(stats.byAction.enabled).toBe(1);
+			expect(stats.byAction.revoked).toBe(1);
 		});
 
 		it("should return last activity timestamp", async () => {

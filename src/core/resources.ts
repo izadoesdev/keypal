@@ -35,7 +35,8 @@ export class ResourceBuilder {
 			}
 			this.resources[key] = Array.from(existingScopes);
 		} else {
-			this.resources[key] = [...scopes];
+			// Direct assignment instead of spread for new keys
+			this.resources[key] = scopes;
 		}
 
 		return this;

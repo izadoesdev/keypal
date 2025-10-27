@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { generateKey } from "./generate";
+import { generateKey } from "@src/core/generate";
 
 describe("generateKey", () => {
 	it("should generate a key with default length", () => {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { extractKeyFromHeaders, hasApiKey } from "./extract-key";
+import { extractKeyFromHeaders, hasApiKey } from "@src/core/extract-key";
 
 describe("extractKeyFromHeaders", () => {
 	describe("with Headers object", () => {

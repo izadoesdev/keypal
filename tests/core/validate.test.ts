@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { hashKey } from "./hash";
-import { validateKey } from "./validate";
+import { hashKey } from "@src/core/hash";
+import { validateKey } from "@src/core/validate";
 
 describe("validateKey", () => {
 	it("should validate a correct key", () => {

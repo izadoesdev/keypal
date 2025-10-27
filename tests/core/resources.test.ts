@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createResourceBuilder, ResourceBuilder } from "./resources";
+import { createResourceBuilder, ResourceBuilder } from "@src/core/resources";
 
 describe("ResourceBuilder", () => {
 	describe("add", () => {

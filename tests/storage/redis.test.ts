@@ -1,8 +1,8 @@
 import Redis from "ioredis";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { createKeys } from "../manager";
-import type { ApiKeyRecord } from "../types/api-key-types";
-import { RedisStore } from "./redis";
+import { createKeys } from "@src/manager";
+import type { ApiKeyRecord } from "@src/types/api-key-types";
+import { RedisStore } from "@src/storage/redis";
 
 describe("RedisStore", () => {
 	let redis: Redis;

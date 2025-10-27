@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { hashKey } from "./hash";
+import { hashKey } from "@src/core/hash";
 
 describe("hashKey", () => {
 	it("should hash a key with default algorithm (sha256)", () => {

@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { MemoryCache } from "./core/cache";
-import { createKeys } from "./manager";
-import { MemoryStore } from "./storage/memory";
+import { MemoryCache } from "@src/core/cache";
+import { createKeys } from "@src/manager";
+import { MemoryStore } from "@src/storage/memory";
 
 const ISO_DATE_REGEX = /^\d{4}-\d{2}-\d{2}T/;
 const SK_TEST_PREFIX_REGEX = /^sk_test_/;

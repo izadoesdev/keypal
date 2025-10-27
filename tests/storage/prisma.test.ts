@@ -1,9 +1,9 @@
 import { PrismaClient } from "@prisma/client";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
-import { createKeys } from "../manager";
-import type { ApiKeyRecord } from "../types/api-key-types";
-import { ApiKeyErrorCode } from "../types/error-types";
-import { PrismaStore } from "./prisma";
+import { createKeys } from "@src/manager";
+import type { ApiKeyRecord } from "@src/types/api-key-types";
+import { ApiKeyErrorCode } from "@src/types/error-types";
+import { PrismaStore } from "@src/storage/prisma";
 
 const REGEX_UPDATED_NAME = /Updated \d/;
 const MANY_SCOPES_COUNT = 25;

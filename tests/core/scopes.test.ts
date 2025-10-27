@@ -6,7 +6,7 @@ import {
 	hasAnyScopeWithResources,
 	hasScope,
 	hasScopeWithResources,
-} from "./scopes";
+} from "@src/core/scopes";
 
 describe("scopes (basic)", () => {
 	describe("hasScope", () => {

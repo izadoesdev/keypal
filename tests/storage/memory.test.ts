@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { createKeys } from "../manager";
-import type { ApiKeyRecord } from "../types/api-key-types";
-import { MemoryStore } from "./memory";
+import { createKeys } from "@src/manager";
+import type { ApiKeyRecord } from "@src/types/api-key-types";
+import { MemoryStore } from "@src/storage/memory";
 
 describe("MemoryStore", () => {
 	let store: MemoryStore;

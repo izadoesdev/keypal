@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { getExpirationTime, isExpired } from "./expiration";
+import { getExpirationTime, isExpired } from "@src/core/expiration";
 
 const EXPIRATION_TIME_BUFFER = 5;
 

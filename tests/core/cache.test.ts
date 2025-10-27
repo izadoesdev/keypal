@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { MemoryCache, RedisCache } from "./cache";
+import { MemoryCache, RedisCache } from "@src/core/cache";
 
 describe("MemoryCache", () => {
 	let cache: MemoryCache;

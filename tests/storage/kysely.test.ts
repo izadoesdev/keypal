@@ -1,11 +1,10 @@
-import { drizzle } from "drizzle-orm/node-postgres";
+import { Kysely, PostgresDialect, sql } from "kysely";
 import { Pool } from "pg";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
-import { apikey } from "../drizzle/schema";
-import { createKeys } from "../manager";
-import type { ApiKeyRecord } from "../types/api-key-types";
-import { ApiKeyErrorCode } from "../types/error-types";
-import { DrizzleStore } from "./drizzle";
+import { createKeys } from "@src/manager";
+import type { ApiKeyRecord } from "@src/types/api-key-types";
+import { ApiKeyErrorCode } from "@src/types/error-types";
+import { type ApiKeysDatabase, KyselyStore } from "@src/storage/kysely";
 
 const REGEX_UPDATED_NAME = /Updated \d/;
 const MANY_SCOPES_COUNT = 25;
@@ -21,49 +20,49 @@ const MIXED_DELETES_COUNT = 50;
 const OWNER_TEST_COUNT = 100;
 const OWNERS_COUNT = 10;
 
-describe("DrizzleStore", () => {
+describe("KyselyStore", () => {
 	let pool: Pool;
-	let db: ReturnType<typeof drizzle<{ apikey: typeof apikey }>>;
-	let store: DrizzleStore;
+	let db: Kysely<ApiKeysDatabase>;
+	let store: KyselyStore;
 	let keys: ReturnType<typeof createKeys>;
 
 	beforeAll(async () => {
 		pool = new Pool({
 			connectionString:
 				process.env.DATABASE_URL ||
-				"postgresql://keypal:keypal_dev@localhost:5434/keypal_drizzle",
+				"postgresql://keypal:keypal_dev@localhost:5433/keypal_kysely",
 		});
 
 		try {
 			await pool.query("SELECT 1");
 		} catch (error) {
 			console.warn(
-				"PostgreSQL not available. Skipping Drizzle tests. Start with: docker-compose up postgres"
+				"PostgreSQL not available. Skipping Kysely tests. Start with: docker-compose up postgres"
 			);
 			throw error;
 		}
 
-		db = drizzle(pool, { schema: { apikey } }) as ReturnType<
-			typeof drizzle<{ apikey: typeof apikey }>
-		>;
+		db = new Kysely<ApiKeysDatabase>({
+			dialect: new PostgresDialect({ pool }),
+		});
 
-		await pool.query(`
+		await sql`
 			CREATE TABLE IF NOT EXISTS apikey (
 				id TEXT PRIMARY KEY NOT NULL,
 				key_hash TEXT NOT NULL,
 				metadata JSONB NOT NULL
 			)
-		`);
+		`.execute(db);
 
-		await pool.query(`
+		await sql`
 			CREATE INDEX IF NOT EXISTS apikey_key_hash_idx ON apikey(key_hash)
-		`);
+		`.execute(db);
 
-		await pool.query(`
+		await sql`
 			CREATE UNIQUE INDEX IF NOT EXISTS apikey_key_hash_unique ON apikey(key_hash)
-		`);
+		`.execute(db);
 
-		store = new DrizzleStore({ db, table: apikey });
+		store = new KyselyStore({ db, table: "apikey" });
 
 		keys = createKeys({
 			prefix: "sk_test_",
@@ -74,11 +73,12 @@ describe("DrizzleStore", () => {
 	});
 
 	afterEach(async () => {
-		await pool.query("TRUNCATE TABLE apikey");
+		await sql`TRUNCATE TABLE apikey`.execute(db);
 	});
 
 	afterAll(async () => {
-		await pool.end();
+		await sql`TRUNCATE TABLE apikey`.execute(db);
+		await db.destroy();
 	});
 
 	describe("save", () => {
@@ -121,6 +121,35 @@ describe("DrizzleStore", () => {
 			const found = await store.findById(record1.id);
 			expect(found?.metadata.name).toBe("Original");
 			expect(found?.metadata.ownerId).toBe("user_overwrite");
+		});
+
+		it("should preserve all metadata fields", async () => {
+			const oneDay = 86_400_000;
+			const metadata = {
+				ownerId: "user_all_fields",
+				name: "Complete Key",
+				description: "A key with all fields",
+				scopes: ["read", "write", "admin"],
+				resources: {
+					"project:123": ["read"],
+					"project:456": ["write", "delete"],
+				},
+				enabled: true,
+				expiresAt: new Date(Date.now() + oneDay).toISOString(),
+				createdAt: new Date().toISOString(),
+			};
+
+			const { record } = await keys.create(metadata);
+
+			const result = await store.findById(record.id);
+			expect(result).not.toBeNull();
+			expect(result?.metadata.name).toBe(metadata.name);
+			expect(result?.metadata.description).toBe(metadata.description);
+			expect(result?.metadata.scopes).toEqual(metadata.scopes);
+			expect(result?.metadata.resources).toEqual(metadata.resources);
+			expect(result?.metadata.enabled).toBe(metadata.enabled);
+			expect(result?.metadata.expiresAt).toBe(metadata.expiresAt);
+			expect(result?.metadata.createdAt).toBe(metadata.createdAt);
 		});
 	});
 
@@ -195,9 +224,9 @@ describe("DrizzleStore", () => {
 				tags: ["test", "key", "more", "tags"],
 			});
 
-			const found = await store.findByTag("test");
-			expect(found).toHaveLength(1);
-			expect(found[0]?.id).toBe(record.id);
+		const found = await store.findByTag("test");
+		expect(found).toHaveLength(1);
+		expect(found.at(0)?.id).toBe(record.id);
 		});
 
 		it("should find all records by multiple tags (OR logic)", async () => {
@@ -229,9 +258,9 @@ describe("DrizzleStore", () => {
 				tags: ["test"],
 			});
 
-			const found = await store.findByTag("test", "user_123");
-			expect(found).toHaveLength(1);
-			expect(found[0]?.id).toBe(record.id);
+		const found = await store.findByTag("test", "user_123");
+		expect(found).toHaveLength(1);
+		expect(found.at(0)?.id).toBe(record.id);
 		});
 
 		it("should find all records by owner and multiple tags", async () => {
@@ -245,9 +274,9 @@ describe("DrizzleStore", () => {
 				tags: ["test", "key"],
 			});
 
-			const found = await store.findByTags(["test", "key"], "user_123");
-			expect(found).toHaveLength(1);
-			expect(found[0]?.id).toBe(record.id);
+		const found = await store.findByTags(["test", "key"], "user_123");
+		expect(found).toHaveLength(1);
+		expect(found.at(0)?.id).toBe(record.id);
 		});
 	});
 
@@ -1212,3 +1241,4 @@ describe("DrizzleStore", () => {
 		});
 	});
 });
+

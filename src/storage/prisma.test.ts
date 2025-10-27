@@ -29,7 +29,7 @@ describe("PrismaStore", () => {
 	beforeAll(async () => {
 		const DATABASE_URL =
 			process.env.DATABASE_URL ||
-			"postgresql://keypal:keypal_dev@localhost:5432/keypal";
+			"postgresql://keypal:keypal_dev@localhost:5435/keypal_prisma";
 
 		try {
 			prisma = new PrismaClient({
@@ -59,20 +59,11 @@ describe("PrismaStore", () => {
 	});
 
 	afterEach(async () => {
-		if (prisma) {
-			await prisma.apiKey.deleteMany();
-		}
+		await prisma.apiKey.deleteMany();
 	});
 
 	afterAll(async () => {
-		if (prisma) {
-			try {
-				await prisma.apiKey.deleteMany();
-				await prisma.$disconnect();
-			} catch {
-				// Ignore cleanup errors
-			}
-		}
+		await prisma.$disconnect();
 	});
 
 	describe("save", () => {

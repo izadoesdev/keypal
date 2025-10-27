@@ -30,7 +30,7 @@ describe("KyselyStore", () => {
 		pool = new Pool({
 			connectionString:
 				process.env.DATABASE_URL ||
-				"postgresql://keypal:keypal_dev@localhost:5432/keypal",
+				"postgresql://keypal:keypal_dev@localhost:5433/keypal_kysely",
 		});
 
 		try {
@@ -195,9 +195,9 @@ describe("KyselyStore", () => {
 				tags: ["test", "key", "more", "tags"],
 			});
 
-			const found = await store.findByTag("test");
-			expect(found).toHaveLength(1);
-			expect(found[0]?.id).toBe(record.id);
+		const found = await store.findByTag("test");
+		expect(found).toHaveLength(1);
+		expect(found.at(0)?.id).toBe(record.id);
 		});
 
 		it("should find all records by multiple tags (OR logic)", async () => {
@@ -229,9 +229,9 @@ describe("KyselyStore", () => {
 				tags: ["test"],
 			});
 
-			const found = await store.findByTag("test", "user_123");
-			expect(found).toHaveLength(1);
-			expect(found[0]?.id).toBe(record.id);
+		const found = await store.findByTag("test", "user_123");
+		expect(found).toHaveLength(1);
+		expect(found.at(0)?.id).toBe(record.id);
 		});
 
 		it("should find all records by owner and multiple tags", async () => {
@@ -245,9 +245,9 @@ describe("KyselyStore", () => {
 				tags: ["test", "key"],
 			});
 
-			const found = await store.findByTags(["test", "key"], "user_123");
-			expect(found).toHaveLength(1);
-			expect(found[0]?.id).toBe(record.id);
+		const found = await store.findByTags(["test", "key"], "user_123");
+		expect(found).toHaveLength(1);
+		expect(found.at(0)?.id).toBe(record.id);
 		});
 	});
 

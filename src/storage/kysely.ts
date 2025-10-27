@@ -52,10 +52,15 @@ export class KyselyStore implements Storage {
 			return null;
 		}
 
+		const metadata =
+			typeof row.metadata === "string"
+				? JSON.parse(row.metadata)
+				: row.metadata;
+
 		return {
 			id: row.id,
 			keyHash: row.key_hash,
-			metadata: row.metadata,
+			metadata: metadata as ApiKeyMetadata,
 		};
 	}
 
@@ -122,10 +127,8 @@ export class KyselyStore implements Storage {
 				sql<boolean>`metadata @> ${JSON.stringify({ tags: [tag] })}`
 			);
 
-			// biome-ignore lint/suspicious/noExplicitAny: Kysely or/eb types are complex
-			query = query.where(({ or, eb }: any) =>
-				or(tagConditions.map((condition: any) => eb(condition, "is not", null)))
-			);
+			// biome-ignore lint/suspicious/noExplicitAny: Kysely or types are complex
+			query = query.where(({ or }: any) => or(tagConditions));
 		}
 
 		// Add owner filter (AND logic)

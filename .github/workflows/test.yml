@@ -35,6 +35,48 @@ jobs:
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
+      
+      postgres-kysely:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: keypal
+          POSTGRES_PASSWORD: keypal_dev
+          POSTGRES_DB: keypal_kysely
+        ports:
+          - 5433:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      
+      postgres-drizzle:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: keypal
+          POSTGRES_PASSWORD: keypal_dev
+          POSTGRES_DB: keypal_drizzle
+        ports:
+          - 5434:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      
+      postgres-prisma:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: keypal
+          POSTGRES_PASSWORD: keypal_dev
+          POSTGRES_DB: keypal_prisma
+        ports:
+          - 5435:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
 
     steps:
       - name: Checkout code
@@ -48,32 +90,33 @@ jobs:
       - name: Install dependencies
         run: bun install
 
-      - name: Create Drizzle database
-        run: |
-          docker run --rm --network host -e PGPASSWORD=keypal_dev postgres:17-alpine psql -h localhost -U keypal -d postgres -c "CREATE DATABASE keypal_drizzle;" || true
-
       - name: Run tests
-        run: bun run test --exclude '**/prisma.test.ts'
+        run: bun run test --exclude '**/prisma.test.ts' --exclude '**/kysely.test.ts' --exclude '**/drizzle.test.ts'
 
       - name: Run Redis tests
         run: bun run test:redis
         env:
           REDIS_URL: redis://localhost:6379
 
-      - name: Push Prisma schema
-        run: bunx prisma db push
+      - name: Run Kysely tests
+        run: bun run test:kysely
         env:
-          DATABASE_URL: postgresql://keypal:keypal_dev@localhost:5432/keypal
-
-      - name: Run Prisma tests
-        run: bun run test:prisma
-        env:
-          DATABASE_URL: postgresql://keypal:keypal_dev@localhost:5432/keypal
+          DATABASE_URL: postgresql://keypal:keypal_dev@localhost:5433/keypal_kysely
 
       - name: Run Drizzle tests
         run: bun run test:drizzle
         env:
-          DATABASE_URL: postgresql://keypal:keypal_dev@localhost:5432/keypal_drizzle
+          DATABASE_URL: postgresql://keypal:keypal_dev@localhost:5434/keypal_drizzle
+
+      - name: Push Prisma schema
+        run: bunx prisma db push
+        env:
+          DATABASE_URL: postgresql://keypal:keypal_dev@localhost:5435/keypal_prisma
+
+      - name: Run Prisma tests
+        run: bun run test:prisma
+        env:
+          DATABASE_URL: postgresql://keypal:keypal_dev@localhost:5435/keypal_prisma
 
   build:
     name: Build

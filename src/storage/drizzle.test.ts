@@ -31,7 +31,7 @@ describe("DrizzleStore", () => {
 		pool = new Pool({
 			connectionString:
 				process.env.DATABASE_URL ||
-				"postgresql://keypal:keypal_dev@localhost:5432/keypal",
+				"postgresql://keypal:keypal_dev@localhost:5434/keypal_drizzle",
 		});
 
 		try {

@@ -31,6 +31,11 @@
       "types": "./dist/storage/prisma.d.ts",
       "require": "./dist/storage/prisma.cjs",
       "import": "./dist/storage/prisma.mjs"
+    },
+    "./kysely": {
+      "types": "./dist/storage/kysely.d.ts",
+      "require": "./dist/storage/kysely.cjs",
+      "import": "./dist/storage/kysely.mjs"
     }
   },
   "repository": {
@@ -66,6 +71,7 @@
     "test:redis": "vitest run src/storage/redis.test.ts",
     "test:drizzle": "vitest run src/storage/drizzle.test.ts",
     "test:prisma": "vitest run src/storage/prisma.test.ts",
+    "test:kysely": "vitest run src/storage/kysely.test.ts",
     "prisma:generate": "prisma generate",
     "bench": "bun run benchmark.ts",
     "example:hono": "bun run examples/hono-api.ts",
@@ -103,7 +109,8 @@
     "ioredis": "^5.8.2",
     "drizzle-orm": "^0.44.6",
     "drizzle-kit": "^0.31.0",
-    "@prisma/client": "^6.18.0"
+    "@prisma/client": "^6.18.0",
+    "kysely": "^0.28.8"
   },
   "dependencies": {
     "convex": "^1.28.0",

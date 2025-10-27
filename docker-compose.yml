@@ -16,6 +16,57 @@ services:
       timeout: 3s
       retries: 5
 
+  postgres-kysely:
+    image: postgres:18-alpine
+    container_name: keypal-postgres-kysely
+    ports:
+      - "5433:5432"
+    environment:
+      POSTGRES_USER: keypal
+      POSTGRES_PASSWORD: keypal_dev
+      POSTGRES_DB: keypal_kysely
+    volumes:
+      - postgres-kysely-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U keypal"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  postgres-drizzle:
+    image: postgres:18-alpine
+    container_name: keypal-postgres-drizzle
+    ports:
+      - "5434:5432"
+    environment:
+      POSTGRES_USER: keypal
+      POSTGRES_PASSWORD: keypal_dev
+      POSTGRES_DB: keypal_drizzle
+    volumes:
+      - postgres-drizzle-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U keypal"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  postgres-prisma:
+    image: postgres:18-alpine
+    container_name: keypal-postgres-prisma
+    ports:
+      - "5435:5432"
+    environment:
+      POSTGRES_USER: keypal
+      POSTGRES_PASSWORD: keypal_dev
+      POSTGRES_DB: keypal_prisma
+    volumes:
+      - postgres-prisma-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U keypal"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
   redis:
     image: redis:7-alpine
     container_name: keypal-redis
@@ -32,4 +83,7 @@ services:
 
 volumes:
   postgres-data:
+  postgres-kysely-data:
+  postgres-drizzle-data:
+  postgres-prisma-data:
   redis-data:

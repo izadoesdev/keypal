@@ -109,7 +109,11 @@ export function createApiKeyError(
 export function createErrorResult(
 	code: ApiKeyErrorCode,
 	details?: unknown
-): { valid: false; error: string; errorCode: ApiKeyErrorCode } {
+): {
+	valid: false;
+	error: string;
+	errorCode: ApiKeyErrorCode;
+} {
 	const error = createApiKeyError(code, details);
 	return {
 		valid: false,

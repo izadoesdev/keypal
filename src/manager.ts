@@ -364,7 +364,8 @@ export class ApiKeyManager {
 					if (this.rateLimiter) {
 						const rateLimitResult = await this.rateLimiter.check(record);
 						if (!rateLimitResult.allowed) {
-							return createErrorResult(ApiKeyErrorCode.RATE_LIMIT_EXCEEDED, {
+							return {
+								...createErrorResult(ApiKeyErrorCode.RATE_LIMIT_EXCEEDED),
 								rateLimit: {
 									current: rateLimitResult.current,
 									limit: rateLimitResult.limit,
@@ -372,7 +373,7 @@ export class ApiKeyManager {
 									resetMs: rateLimitResult.resetMs,
 									resetAt: rateLimitResult.resetAt,
 								},
-							});
+							};
 						}
 
 						// Track usage if enabled

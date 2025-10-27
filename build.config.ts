@@ -16,7 +16,6 @@ export default defineBuildConfig({
 	declaration: true,
 	clean: true,
 	rollup: {
-		emitCJS: true,
 		esbuild: {
 			minify: true,
 			treeShaking: true,
@@ -39,5 +38,7 @@ export default defineBuildConfig({
 		"ioredis",
 		"kysely",
 		"pg",
+		"nanoid",
+		"typebox",
 	],
 });

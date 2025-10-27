@@ -463,9 +463,7 @@ export class ApiKeyManager {
 			const rateLimitResult = await this.rateLimiter.check(record);
 			if (!rateLimitResult.allowed) {
 				return {
-					valid: false,
-					error: "Rate limit exceeded",
-					errorCode: ApiKeyErrorCode.RATE_LIMIT_EXCEEDED,
+					...createErrorResult(ApiKeyErrorCode.RATE_LIMIT_EXCEEDED),
 					rateLimit: {
 						current: rateLimitResult.current,
 						limit: rateLimitResult.limit,

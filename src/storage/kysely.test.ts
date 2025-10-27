@@ -122,6 +122,35 @@ describe("KyselyStore", () => {
 			expect(found?.metadata.name).toBe("Original");
 			expect(found?.metadata.ownerId).toBe("user_overwrite");
 		});
+
+		it("should preserve all metadata fields", async () => {
+			const oneDay = 86_400_000;
+			const metadata = {
+				ownerId: "user_all_fields",
+				name: "Complete Key",
+				description: "A key with all fields",
+				scopes: ["read", "write", "admin"],
+				resources: {
+					"project:123": ["read"],
+					"project:456": ["write", "delete"],
+				},
+				enabled: true,
+				expiresAt: new Date(Date.now() + oneDay).toISOString(),
+				createdAt: new Date().toISOString(),
+			};
+
+			const { record } = await keys.create(metadata);
+
+			const result = await store.findById(record.id);
+			expect(result).not.toBeNull();
+			expect(result?.metadata.name).toBe(metadata.name);
+			expect(result?.metadata.description).toBe(metadata.description);
+			expect(result?.metadata.scopes).toEqual(metadata.scopes);
+			expect(result?.metadata.resources).toEqual(metadata.resources);
+			expect(result?.metadata.enabled).toBe(metadata.enabled);
+			expect(result?.metadata.expiresAt).toBe(metadata.expiresAt);
+			expect(result?.metadata.createdAt).toBe(metadata.createdAt);
+		});
 	});
 
 	describe("findByHash", () => {

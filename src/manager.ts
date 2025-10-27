@@ -455,7 +455,6 @@ export class ApiKeyManager {
 
 		await this.storage.save(record);
 
-		// Create audit log with key details
 		await this.logAction("created", record.id, record.metadata.ownerId, {
 			...context,
 			metadata: {

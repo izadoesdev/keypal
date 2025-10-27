@@ -444,9 +444,15 @@ export class ApiKeyManager {
 			// Cache the record first so subsequent requests can use the cache path
 			if (this.cache && !options.skipCache) {
 				try {
+					const cacheRecord: CacheRecord = {
+						id: record.id,
+						expiresAt: record.metadata.expiresAt ?? null,
+						revokedAt: record.metadata.revokedAt ?? null,
+						enabled: record.metadata.enabled ?? true,
+					};
 					await this.cache.set(
 						`apikey:${keyHash}`,
-						JSON.stringify(record),
+						JSON.stringify(cacheRecord),
 						this.cacheTtl
 					);
 				} catch (error) {

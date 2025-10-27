@@ -2,20 +2,12 @@
 
 ## Recommended Additions
 
-### 1. Rate Limiting Helper
+### 1. Key Rotation
 ```typescript
-interface RateLimitConfig {
-  maxRequests: number
-  windowMs: number
-}
-
-// Usage:
-const rateLimiter = keys.createRateLimiter({
-  maxRequests: 100,
-  windowMs: 60000, // 1 minute
+// Rotate a key (create new, mark old as rotating)
+const { newKey, oldRecord } = await keys.rotate(oldKeyId, {
+  gracePeriodMs: 86400000, // 24 hours
 })
-
-await rateLimiter.check(apiKeyRecord)
 ```
 
 ### 2. Usage Analytics
@@ -31,7 +23,22 @@ await keys.trackUsage(keyId, {
 const stats = await keys.getUsageStats(keyId)
 ```
 
-### 2. IP Whitelisting
+### 3. Webhook Events
+```typescript
+keys.on('key.created', async (event) => {
+  await sendWebhook(event.ownerId, 'key_created', event.data)
+})
+
+keys.on('key.used', async (event) => {
+  // Log to analytics
+})
+
+keys.on('key.expired', async (event) => {
+  // Notify owner
+})
+```
+
+### 4. IP Whitelisting
 ```typescript
 await keys.create({
   ownerId: 'user_123',
@@ -41,7 +48,7 @@ await keys.create({
 await keys.verify(key, { ipAddress: req.ip })
 ```
 
-### 3. Request Signing
+### 5. Request Signing
 ```typescript
 // HMAC-based request signing
 const signature = keys.sign(request, apiKey)
@@ -50,7 +57,7 @@ const signature = keys.sign(request, apiKey)
 const isValid = await keys.verifySignature(request, signature, keyId)
 ```
 
-### 4. Bulk Operations
+### 6. Bulk Operations
 ```typescript
 // Bulk create
 const results = await keys.createBulk([
@@ -62,7 +69,7 @@ const results = await keys.createBulk([
 await keys.revokeBulk(['key_1', 'key_2', 'key_3'])
 ```
 
-### 5. Key Templates
+### 7. Key Templates
 ```typescript
 // Define reusable templates
 const template = keys.defineTemplate('readonly', {
@@ -96,6 +103,7 @@ const { key } = await keys.createFromTemplate(template, {
 - Key tags/labels
 - Audit logging (opt-in)
 - Key rotation
+- Rate limiting (opt-in)
 
 ## Implementation Notes
 

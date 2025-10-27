@@ -1,4 +1,4 @@
-import { sql, type Kysely } from "kysely";
+import { type Kysely, sql } from "kysely";
 import type { ApiKeyMetadata, ApiKeyRecord } from "../types/api-key-types";
 import type { Storage } from "../types/storage-types";
 
@@ -40,7 +40,10 @@ export class KyselyStore implements Storage {
 	private readonly db: Kysely<ApiKeysDatabase>;
 	private readonly table: keyof ApiKeysDatabase;
 
-	constructor(options: { db: Kysely<ApiKeysDatabase>; table: keyof ApiKeysDatabase }) {
+	constructor(options: {
+		db: Kysely<ApiKeysDatabase>;
+		table: keyof ApiKeysDatabase;
+	}) {
 		this.db = options.db;
 		this.table = options.table;
 	}
@@ -73,10 +76,7 @@ export class KyselyStore implements Storage {
 	}
 
 	async save(record: ApiKeyRecord): Promise<void> {
-		await this.db
-			.insertInto(this.table)
-			.values(this.toRow(record))
-			.execute();
+		await this.db.insertInto(this.table).values(this.toRow(record)).execute();
 	}
 
 	async findByHash(keyHash: string): Promise<ApiKeyRecord | null> {
@@ -123,8 +123,8 @@ export class KyselyStore implements Storage {
 		// Build tag conditions (OR logic)
 		if (tags.length > 0) {
 			const lowercasedTags = tags.map((t) => t.toLowerCase());
-			const tagConditions = lowercasedTags.map((tag) =>
-				sql<boolean>`metadata @> ${JSON.stringify({ tags: [tag] })}`
+			const tagConditions = lowercasedTags.map(
+				(tag) => sql<boolean>`metadata @> ${JSON.stringify({ tags: [tag] })}`
 			);
 
 			// biome-ignore lint/suspicious/noExplicitAny: Kysely or types are complex
@@ -177,4 +177,3 @@ export class KyselyStore implements Storage {
 			.execute();
 	}
 }
-

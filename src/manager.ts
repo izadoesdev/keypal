@@ -8,6 +8,7 @@ import {
 } from "./core/extract-key";
 import { generateKey } from "./core/generate";
 import { hashKey } from "./core/hash";
+import { RateLimiter } from "./core/rate-limiter";
 import {
 	hasAllScopesWithResources,
 	hasAnyScopeWithResources,
@@ -32,6 +33,7 @@ import {
 	createErrorResult,
 } from "./types/error-types";
 import type { PermissionScope } from "./types/permissions-types";
+import type { RateLimitConfig } from "./types/rate-limit-types";
 import type { Storage } from "./types/storage-types";
 import { logger } from "./utils/logger";
 
@@ -47,17 +49,30 @@ export type VerifyResult = {
 	error?: string;
 	/** Error code for programmatic handling */
 	errorCode?: ApiKeyErrorCode;
+	/** Rate limit information (only included if rate limiting is enabled) */
+	rateLimit?: {
+		/** Current request count in the window */
+		current: number;
+		/** Maximum number of requests allowed within the window */
+		limit: number;
+		/** Number of requests remaining within the window */
+		remaining: number;
+		/** Time in milliseconds until the window resets */
+		resetMs: number;
+		/** ISO timestamp when the window resets */
+		resetAt: string;
+	};
 };
 
 /**
  * Minimal record stored in cache to reduce exposure
  */
-interface CacheRecord {
+type CacheRecord = {
 	id: string;
 	expiresAt: string | null;
 	revokedAt: string | null;
 	enabled: boolean;
-}
+};
 
 /**
  * Options for verifying API keys
@@ -107,20 +122,22 @@ export class ApiKeyManager {
 	private readonly revokedKeyTtl: number;
 	private readonly isRedisStorage: boolean;
 	private readonly autoTrackUsage: boolean;
+	private readonly rateLimiter?: RateLimiter;
 	private readonly auditLogsEnabled: boolean;
 	private readonly defaultContext?: ActionContext;
 
 	constructor(config: ConfigInput = {}) {
+		const salt = config.salt
+			? hashKey(config.salt, { algorithm: "sha256" })
+			: "";
 
-		const salt = config.salt ? hashKey(config.salt, { algorithm: "sha256" }) : "";
-		
 		this.config = {
 			prefix: config.prefix,
 			// biome-ignore lint/style/noMagicNumbers: 32 characters default
 			length: config.length ?? 32,
 			algorithm: config.algorithm ?? "sha256",
 			alphabet: config.alphabet,
-			salt
+			salt,
 		};
 
 		// biome-ignore lint/style/noMagicNumbers: 7 days default (604800 seconds)
@@ -168,6 +185,11 @@ export class ApiKeyManager {
 			this.cache = config.cache;
 		}
 		// else: cache is false/undefined by default, no caching
+
+		// Initialize rate limiter if configured
+		if (config.rateLimit) {
+			this.rateLimiter = this.createRateLimiter(config.rateLimit);
+		}
 	}
 
 	generateKey(): string {
@@ -334,6 +356,47 @@ export class ApiKeyManager {
 						return createErrorResult(ApiKeyErrorCode.REVOKED);
 					}
 
+					if (record.metadata.enabled === false) {
+						return createErrorResult(ApiKeyErrorCode.DISABLED);
+					}
+
+					// Check rate limit if enabled
+					if (this.rateLimiter) {
+						const rateLimitResult = await this.rateLimiter.check(record);
+						if (!rateLimitResult.allowed) {
+							return {
+								...createErrorResult(ApiKeyErrorCode.RATE_LIMIT_EXCEEDED),
+								rateLimit: {
+									current: rateLimitResult.current,
+									limit: rateLimitResult.limit,
+									remaining: rateLimitResult.remaining,
+									resetMs: rateLimitResult.resetMs,
+									resetAt: rateLimitResult.resetAt,
+								},
+							};
+						}
+
+						// Track usage if enabled
+						if (this.autoTrackUsage && !options.skipTracking) {
+							this.updateLastUsed(record.id).catch((err) => {
+								logger.error("Failed to track usage:", err);
+							});
+						}
+
+						return {
+							valid: true,
+							record,
+							rateLimit: {
+								current: rateLimitResult.current,
+								limit: rateLimitResult.limit,
+								remaining: rateLimitResult.remaining,
+								resetMs: rateLimitResult.resetMs,
+								resetAt: rateLimitResult.resetAt,
+							},
+						};
+					}
+
+					// Track usage if enabled
 					if (this.autoTrackUsage && !options.skipTracking) {
 						this.updateLastUsed(record.id).catch((err) => {
 							logger.error("Failed to track usage:", err);
@@ -374,6 +437,61 @@ export class ApiKeyManager {
 
 		if (record.metadata.enabled === false) {
 			return createErrorResult(ApiKeyErrorCode.DISABLED);
+		}
+
+		// Check rate limit if enabled
+		if (this.rateLimiter) {
+			// Cache the record first so subsequent requests can use the cache path
+			if (this.cache && !options.skipCache) {
+				try {
+					const cacheRecord: CacheRecord = {
+						id: record.id,
+						expiresAt: record.metadata.expiresAt ?? null,
+						revokedAt: record.metadata.revokedAt ?? null,
+						enabled: record.metadata.enabled ?? true,
+					};
+					await this.cache.set(
+						`apikey:${keyHash}`,
+						JSON.stringify(cacheRecord),
+						this.cacheTtl
+					);
+				} catch (error) {
+					logger.error("CRITICAL: Failed to write to cache:", error);
+				}
+			}
+
+			const rateLimitResult = await this.rateLimiter.check(record);
+			if (!rateLimitResult.allowed) {
+				return {
+					...createErrorResult(ApiKeyErrorCode.RATE_LIMIT_EXCEEDED),
+					rateLimit: {
+						current: rateLimitResult.current,
+						limit: rateLimitResult.limit,
+						remaining: rateLimitResult.remaining,
+						resetMs: rateLimitResult.resetMs,
+						resetAt: rateLimitResult.resetAt,
+					},
+				};
+			}
+
+			// Track usage if enabled
+			if (this.autoTrackUsage && !options.skipTracking) {
+				this.updateLastUsed(record.id).catch((err) => {
+					logger.error("Failed to track usage:", err);
+				});
+			}
+
+			return {
+				valid: true,
+				record,
+				rateLimit: {
+					current: rateLimitResult.current,
+					limit: rateLimitResult.limit,
+					remaining: rateLimitResult.remaining,
+					resetMs: rateLimitResult.resetMs,
+					resetAt: rateLimitResult.resetAt,
+				},
+			};
 		}
 
 		if (this.cache && !options.skipCache) {
@@ -995,6 +1113,35 @@ export class ApiKeyManager {
 		return this.hasAllScopes(record, scopes, {
 			resource: `${resourceType}:${resourceId}`,
 		});
+	}
+
+	/**
+	 * Create a rate limiter instance
+	 *
+	 * @param config - Rate limit configuration
+	 * @returns A RateLimiter instance for checking request limits
+	 *
+	 * @example
+	 * ```typescript
+	 * const rateLimiter = keys.createRateLimiter({
+	 *   maxRequests: 100,
+	 *   windowMs: 60000, // 1 minute
+	 * });
+	 *
+	 * const result = await rateLimiter.check(apiKeyRecord);
+	 * if (!result.allowed) {
+	 *   throw new Error(`Rate limit exceeded. Reset in ${result.resetMs}ms`);
+	 * }
+	 * ```
+	 */
+	createRateLimiter(config: RateLimitConfig): RateLimiter {
+		if (!this.cache) {
+			throw new Error(
+				"[keypal] Cache is required for rate limiting. Enable cache in ApiKeyManager config."
+			);
+		}
+
+		return new RateLimiter(this.cache, config);
 	}
 }
 

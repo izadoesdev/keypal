@@ -26,6 +26,9 @@ export const ApiKeyErrorCode = {
 	/** Cache error occurred */
 	CACHE_ERROR: "CACHE_ERROR",
 
+	/** Rate limit exceeded */
+	RATE_LIMIT_EXCEEDED: "RATE_LIMIT_EXCEEDED",
+
 	/** API key is already revoked */
 	ALREADY_REVOKED: "ALREADY_REVOKED",
 
@@ -63,6 +66,7 @@ export const ApiKeyErrorMessages: Record<ApiKeyErrorCode, string> = {
 	[ApiKeyErrorCode.DISABLED]: "API key is disabled",
 	[ApiKeyErrorCode.STORAGE_ERROR]: "Storage error occurred",
 	[ApiKeyErrorCode.CACHE_ERROR]: "Cache error occurred",
+	[ApiKeyErrorCode.RATE_LIMIT_EXCEEDED]: "Rate limit exceeded",
 	[ApiKeyErrorCode.ALREADY_REVOKED]: "API key is already revoked",
 	[ApiKeyErrorCode.ALREADY_ENABLED]: "API key is already enabled",
 	[ApiKeyErrorCode.ALREADY_DISABLED]: "API key is already disabled",
@@ -105,7 +109,11 @@ export function createApiKeyError(
 export function createErrorResult(
 	code: ApiKeyErrorCode,
 	details?: unknown
-): { valid: false; error: string; errorCode: ApiKeyErrorCode } {
+): {
+	valid: false;
+	error: string;
+	errorCode: ApiKeyErrorCode;
+} {
 	const error = createApiKeyError(code, details);
 	return {
 		valid: false,

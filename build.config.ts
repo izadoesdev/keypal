@@ -10,12 +10,12 @@ export default defineBuildConfig({
 		"src/storage/redis.ts",
 		"src/storage/drizzle.ts",
 		"src/storage/prisma.ts",
+		"src/storage/kysely.ts",
 		"src/drizzle/schema.ts",
 	],
 	declaration: true,
 	clean: true,
 	rollup: {
-		emitCJS: true,
 		esbuild: {
 			minify: true,
 			treeShaking: true,
@@ -36,5 +36,9 @@ export default defineBuildConfig({
 		"drizzle-orm/node-postgres",
 		"@prisma/client",
 		"ioredis",
+		"kysely",
+		"pg",
+		"nanoid",
+		"typebox",
 	],
 });

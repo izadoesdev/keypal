@@ -72,12 +72,12 @@ await keys.revokeBulk(['key_1', 'key_2', 'key_3'])
 ### 7. Key Templates
 ```typescript
 // Define reusable templates
-keys.defineTemplate('readonly', {
+const template = keys.defineTemplate('readonly', {
   scopes: ['read'],
   expiresIn: '30d',
 })
 
-const { key } = await keys.createFromTemplate('readonly', {
+const { key } = await keys.createFromTemplate(template, {
   ownerId: 'user_123',
 })
 ```

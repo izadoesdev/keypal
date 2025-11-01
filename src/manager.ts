@@ -167,7 +167,6 @@ export class ApiKeyManager {
 		} else if (config.cache && typeof config.cache === "object") {
 			this.cache = config.cache;
 		}
-		// else: cache is false/undefined by default, no caching
 	}
 
 	generateKey(): string {
@@ -357,7 +356,6 @@ export class ApiKeyManager {
 			return createErrorResult(ApiKeyErrorCode.INVALID_KEY);
 		}
 
-		// Check expiration first
 		if (isExpired(record.metadata.expiresAt)) {
 			if (this.cache) {
 				await this.cache.del(`apikey:${keyHash}`);

@@ -19,8 +19,8 @@
       "import": "./dist/storage/redis.mjs"
     },
     "./drizzle": {
-      "types": "./dist/drizzle/schema.d.ts",
-      "import": "./dist/drizzle/schema.mjs"
+      "types": "./dist/storage/drizzle.d.ts",
+      "import": "./dist/storage/drizzle.mjs"
     },
     "./prisma": {
       "types": "./dist/storage/prisma.d.ts",
@@ -29,6 +29,10 @@
     "./kysely": {
       "types": "./dist/storage/kysely.d.ts",
       "import": "./dist/storage/kysely.mjs"
+    },
+    "./drizzle/schema": {
+      "types": "./dist/drizzle/schema.d.ts",
+      "import": "./dist/drizzle/schema.mjs"
     }
   },
   "repository": {

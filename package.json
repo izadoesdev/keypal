@@ -1,6 +1,6 @@
 {
   "name": "keypal",
-  "version": "0.0.2",
+  "version": "0.0.211",
   "description": "A TypeScript library for secure API key management with cryptographic hashing, expiration, scopes, and pluggable storage",
   "type": "module",
   "main": "./dist/index.mjs",
@@ -44,6 +44,11 @@
     "url": "https://github.com/izadoesdev/keypal/issues"
   },
   "license": "MIT",
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
   "keywords": [
     "api-keys",
     "api-key-management",

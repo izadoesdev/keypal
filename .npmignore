@@ -1,6 +1,7 @@
 # Source files - only dist should be published
 src/
 examples/
+example/
 .github/
 docs/
 
@@ -12,9 +13,24 @@ vitest.config.ts
 tsconfig.json
 build.config.ts
 benchmark.ts
+benchmark-core.ts
 FEATURE_SUGGESTIONS.md
 PRD.md
 docker-compose.yml
+drizzle.config.ts
+
+# Environment and config
+.env
+.env.*
+
+# Test files and databases
+coverage/
+prisma/test-prisma.db
+prisma/*.db
+rulesets/
+
+# Git hooks
+.husky/
 
 # Lock files
 bun.lock

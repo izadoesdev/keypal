@@ -4,6 +4,10 @@
 export { getExpirationTime, isExpired } from "./core/expiration";
 export { extractKeyFromHeaders, hasApiKey } from "./core/extract-key";
 export { hasAllScopes, hasAnyScope, hasScope } from "./core/scopes";
+export {
+	ResourceBuilder,
+	createResourceBuilder,
+} from "./core/resources";
 export type { ApiKeyManager, VerifyOptions, VerifyResult } from "./manager";
 export { createKeys } from "./manager";
 export type {

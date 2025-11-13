@@ -1,0 +1,188 @@
+---
+title: ResourceBuilder
+description: Fluent API for building resource-specific scopes
+icon: Layers
+---
+
+# ResourceBuilder
+
+The `ResourceBuilder` provides a clean, chainable API for building resource-specific scopes.
+
+## Basic Usage
+
+```typescript
+import { ResourceBuilder } from 'keypal'
+
+const resources = new ResourceBuilder()
+  .add('website', 'site123', ['read', 'write'])
+  .add('project', 'proj456', ['deploy'])
+  .build()
+```
+
+## Methods
+
+### add()
+
+Add scopes to a resource (merges if exists).
+
+```typescript
+const builder = new ResourceBuilder()
+  .add('project', '123', ['read', 'write'])
+  .add('project', '123', ['admin']) // Merges with existing scopes
+```
+
+**Returns**: `this` (for chaining)
+
+### addOne()
+
+Add a single scope to a resource.
+
+```typescript
+const builder = new ResourceBuilder()
+  .addOne('project', '123', 'read')
+  .addOne('project', '123', 'write')
+```
+
+**Returns**: `this` (for chaining)
+
+### addMany()
+
+Add the same scopes to multiple resources.
+
+```typescript
+const builder = new ResourceBuilder()
+  .addMany('website', ['site1', 'site2', 'site3'], ['read'])
+```
+
+**Returns**: `this` (for chaining)
+
+### remove()
+
+Remove an entire resource.
+
+```typescript
+const builder = new ResourceBuilder()
+  .add('project', '123', ['read', 'write'])
+  .remove('project', '123')
+```
+
+**Returns**: `this` (for chaining)
+
+### removeScopes()
+
+Remove specific scopes from a resource.
+
+```typescript
+const builder = new ResourceBuilder()
+  .add('project', '123', ['read', 'write', 'admin'])
+  .removeScopes('project', '123', ['write'])
+```
+
+**Returns**: `this` (for chaining)
+
+### has()
+
+Check if a resource exists.
+
+```typescript
+const builder = new ResourceBuilder()
+  .add('project', '123', ['read'])
+
+if (builder.has('project', '123')) {
+  const scopes = builder.get('project', '123')
+}
+```
+
+**Returns**: `boolean`
+
+### get()
+
+Get scopes for a resource.
+
+```typescript
+const scopes = builder.get('project', '123')
+// Returns: string[] | undefined
+```
+
+**Returns**: `string[] | undefined`
+
+### clear()
+
+Clear all resources.
+
+```typescript
+builder.clear()
+```
+
+**Returns**: `this` (for chaining)
+
+### build()
+
+Build and return the resources object.
+
+```typescript
+const resources = builder.build()
+// Returns: Record<string, string[]>
+```
+
+**Returns**: `Record<string, string[]>`
+
+## Static Methods
+
+### ResourceBuilder.from()
+
+Create a builder from existing resources.
+
+```typescript
+const existingResources = {
+  'project:123': ['read'],
+  'website:456': ['deploy'],
+}
+
+const updated = ResourceBuilder.from(existingResources)
+  .add('project', '123', ['write']) // Merges with existing
+  .add('team', '789', ['admin'])
+  .build()
+```
+
+## Usage with createKeys()
+
+```typescript
+import { createKeys, ResourceBuilder } from 'keypal'
+
+const resources = new ResourceBuilder()
+  .add('project', '123', ['read', 'write'])
+  .add('website', '456', ['deploy'])
+  .build()
+
+const { key, record } = await keys.create({
+  ownerId: 'user_123',
+  scopes: ['admin'],
+  resources,
+})
+```
+
+## Complete Example
+
+```typescript
+const builder = new ResourceBuilder()
+  .add('project', 'proj1', ['read', 'write'])
+  .add('project', 'proj2', ['read'])
+  .addMany('website', ['site1', 'site2'], ['read'])
+  .add('team', 'team1', ['admin'])
+
+// Modify existing resources
+if (builder.has('project', 'proj1')) {
+  builder.removeScopes('project', 'proj1', ['write'])
+}
+
+// Build final result
+const resources = builder.build()
+
+// Use with createKeys
+await keys.create({
+  ownerId: 'user_123',
+  resources,
+})
+```
+

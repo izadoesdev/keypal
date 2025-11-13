@@ -1,0 +1,139 @@
+---
+title: Custom Storage
+description: Implement your own storage adapter
+icon: Code
+---
+
+# Custom Storage
+
+Implement your own storage adapter by implementing the `Storage` interface.
+
+## Storage Interface
+
+```typescript
+import type { Storage } from 'keypal'
+import type { ApiKeyRecord, ApiKeyMetadata } from 'keypal'
+import type { AuditLog, AuditLogQuery, AuditLogStats } from 'keypal'
+
+const customStorage: Storage = {
+  // Required methods
+  save: async (record: ApiKeyRecord): Promise<void> => {
+    // Save the API key record
+  },
+
+  findByHash: async (keyHash: string): Promise<ApiKeyRecord | null> => {
+    // Find a key by its hash
+  },
+
+  findById: async (id: string): Promise<ApiKeyRecord | null> => {
+    // Find a key by its ID
+  },
+
+  findByOwner: async (ownerId: string): Promise<ApiKeyRecord[]> => {
+    // Find all keys for an owner
+  },
+
+  findByTag: async (tag: string, ownerId?: string): Promise<ApiKeyRecord[]> => {
+    // Find keys by tag
+  },
+
+  findByTags: async (tags: string[], ownerId?: string): Promise<ApiKeyRecord[]> => {
+    // Find keys by tags
+  },
+
+  updateMetadata: async (id: string, metadata: Partial<ApiKeyMetadata>): Promise<void> => {
+    // Update key metadata
+  },
+
+  delete: async (id: string): Promise<void> => {
+    // Delete a key
+  },
+
+  deleteByOwner: async (ownerId: string): Promise<void> => {
+    // Delete all keys for an owner
+  },
+
+  // Optional audit logging methods
+  saveLog: async (log: AuditLog): Promise<void> => {
+    // Save an audit log entry
+  },
+
+  findLogs: async (query: AuditLogQuery): Promise<AuditLog[]> => {
+    // Query audit logs
+  },
+
+  countLogs: async (query: AuditLogQuery): Promise<number> => {
+    // Count audit logs
+  },
+
+  deleteLogs: async (query: AuditLogQuery): Promise<number> => {
+    // Delete audit logs
+  },
+
+  getLogStats: async (ownerId: string): Promise<AuditLogStats> => {
+    // Get audit log statistics
+  },
+}
+```
+
+## Usage
+
+```typescript
+import { createKeys } from 'keypal'
+
+const keys = createKeys({
+  prefix: 'sk_',
+  storage: customStorage,
+})
+```
+
+## Example: MongoDB Storage
+
+```typescript
+import { MongoClient } from 'mongodb'
+import type { Storage, ApiKeyRecord } from 'keypal'
+
+class MongoDBStorage implements Storage {
+  private collection
+
+  constructor(client: MongoClient) {
+    this.collection = client.db('myapp').collection('api_keys')
+  }
+
+  async save(record: ApiKeyRecord): Promise<void> {
+    await this.collection.insertOne(record)
+  }
+
+  async findByHash(keyHash: string): Promise<ApiKeyRecord | null> {
+    return await this.collection.findOne({ keyHash })
+  }
+
+  async findById(id: string): Promise<ApiKeyRecord | null> {
+    return await this.collection.findOne({ id })
+  }
+
+  async findByOwner(ownerId: string): Promise<ApiKeyRecord[]> {
+    return await this.collection
+      .find({ 'metadata.ownerId': ownerId })
+      .toArray()
+  }
+
+  // ... implement other methods
+}
+
+const client = new MongoClient(process.env.MONGODB_URI!)
+await client.connect()
+
+const keys = createKeys({
+  prefix: 'sk_',
+  storage: new MongoDBStorage(client),
+})
+```
+
+## Best Practices
+
+1. **Index key fields**: Create indexes on `keyHash` and `metadata.ownerId` for performance
+2. **Handle errors**: Properly handle and throw errors for failed operations
+3. **Use transactions**: When possible, use transactions for atomic operations
+4. **Implement audit logging**: If you need audit logs, implement the optional methods
+

@@ -1,0 +1,70 @@
+---
+title: Caching
+description: Improve performance with caching
+icon: Zap
+---
+
+# Caching
+
+keypal supports caching to reduce database load and improve verification performance.
+
+## Cache Types
+
+### In-Memory Cache (Default)
+
+```typescript
+const keys = createKeys({
+  cache: true,      // Enable in-memory cache
+  cacheTtl: 60,     // Cache TTL in seconds
+})
+```
+
+### Redis Cache
+
+```typescript
+import Redis from 'ioredis'
+
+const redis = new Redis()
+
+const keys = createKeys({
+  cache: 'redis',   // Use Redis cache
+  redis,            // Redis client instance
+  cacheTtl: 300,    // Cache TTL in seconds
+})
+```
+
+## How Caching Works
+
+1. **On Verify**: After successful verification, the key is cached
+2. **Cache Lookup**: Subsequent verifications check cache first
+3. **Cache Miss**: If not in cache, query storage and cache result
+4. **TTL**: Cached entries expire after the configured TTL
+
+## Cache Invalidation
+
+```typescript
+// Manually invalidate a cached key
+await keys.invalidateCache(keyHash)
+
+// Keys are automatically invalidated when:
+// - Key is revoked
+// - Key is disabled/enabled
+// - Key is rotated
+```
+
+## Skip Cache
+
+```typescript
+// Skip cache lookup for a specific verification
+const result = await keys.verify(key, {
+  skipCache: true, // Always query storage
+})
+```
+
+## Best Practices
+
+1. **Enable caching in production** to reduce database load
+2. **Use Redis cache** for distributed applications
+3. **Set appropriate TTL** based on your needs (60-300 seconds is common)
+4. **Monitor cache hit rates** to optimize performance
+

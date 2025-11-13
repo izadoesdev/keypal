@@ -1,0 +1,119 @@
+---
+title: Prisma
+description: Prisma storage adapter
+icon: Database
+---
+
+# Prisma Storage
+
+Store API keys using Prisma. Works with any database that Prisma supports, including PostgreSQL, MySQL, SQLite, MongoDB, and more.
+
+## Installation
+
+```bash
+npm install @prisma/client prisma
+```
+
+## Prisma Schema
+
+Add the API key model to your `schema.prisma`:
+
+```prisma
+model ApiKey {
+  id       String @id @default(cuid())
+  keyHash  String @unique
+  metadata Json
+
+  @@index([keyHash])
+  @@map("api_keys")
+}
+```
+
+Generate the Prisma client:
+
+```bash
+bunx prisma generate
+```
+
+## Setup
+
+```typescript
+import { PrismaClient } from '@prisma/client'
+import { PrismaStore } from 'keypal/prisma'
+import { createKeys } from 'keypal'
+
+const prisma = new PrismaClient()
+
+const keys = createKeys({
+  prefix: 'sk_prod_',
+  storage: new PrismaStore({ prisma, model: 'apiKey' }),
+  cache: true,
+})
+```
+
+## How It Works
+
+The Prisma adapter:
+- Uses your existing Prisma client instance
+- Stores metadata as JSON in the `metadata` field
+- Leverages Prisma's type-safe queries
+- Works with Prisma migrations and tooling
+
+## Model Name
+
+The `model` parameter should match your Prisma model name (case-sensitive):
+
+```typescript
+const store = new PrismaStore({
+  prisma,
+  model: 'ApiKey', // Must match your Prisma model name
+})
+```
+
+## Migrations
+
+Create and apply migrations using Prisma Migrate:
+
+```bash
+bunx prisma migrate dev
+```
+
+## Unique Features
+
+**Works with any Prisma-supported database**: PostgreSQL, MySQL, SQLite, MongoDB, SQL Server, CockroachDB, and more.
+
+**Use Prisma queries directly**: Query your API keys using Prisma's query API:
+
+```typescript
+// Query keys directly with Prisma
+const expiredKeys = await prisma.apiKey.findMany({
+  where: {
+    metadata: {
+      path: ['expiresAt'],
+      not: null,
+    },
+  },
+})
+```
+
+**Prisma Studio**: View and edit keys using Prisma Studio:
+
+```bash
+bunx prisma studio
+```
+
+**Relations**: You can add relations to your ApiKey model:
+
+```prisma
+model ApiKey {
+  id       String @id @default(cuid())
+  keyHash  String @unique
+  metadata Json
+  userId   String
+  user     User   @relation(fields: [userId], references: [id])
+
+  @@index([keyHash])
+  @@map("api_keys")
+}
+```
+

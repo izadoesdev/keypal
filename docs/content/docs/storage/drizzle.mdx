@@ -1,0 +1,143 @@
+---
+title: Drizzle ORM
+description: Drizzle ORM storage adapter
+icon: Database
+---
+
+# Drizzle ORM Storage
+
+Store API keys in PostgreSQL, MySQL, or SQLite using Drizzle ORM. Works seamlessly with your existing Drizzle setup.
+
+## Installation
+
+```bash
+npm install drizzle-orm drizzle-kit
+# For PostgreSQL
+npm install pg
+# For MySQL
+npm install mysql2
+# For SQLite
+npm install better-sqlite3
+```
+
+## Database Schema
+
+You can define your own schema or use the provided one:
+
+```typescript
+// src/drizzle/schema.ts
+import { index, jsonb, pgTable, text, unique } from 'drizzle-orm/pg-core'
+
+export const apikey = pgTable(
+  'apikey',
+  {
+    id: text().primaryKey().notNull(),
+    keyHash: text('key_hash').notNull(),
+    metadata: jsonb('metadata').notNull(),
+  },
+  (table) => [
+    index('apikey_key_hash_idx').on(table.keyHash),
+    unique('apikey_key_hash_unique').on(table.keyHash),
+  ]
+)
+```
+
+Or import the pre-configured schema:
+
+```typescript
+import { apikey } from 'keypal/drizzle/schema'
+```
+
+## Setup
+
+```typescript
+import { drizzle } from 'drizzle-orm/node-postgres'
+import { Pool } from 'pg'
+import { DrizzleStore } from 'keypal/drizzle'
+import { apikey } from 'keypal/drizzle/schema'
+import { createKeys } from 'keypal'
+
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+})
+
+const db = drizzle(pool, { schema: { apikey } })
+
+const keys = createKeys({
+  prefix: 'sk_prod_',
+  storage: new DrizzleStore({ db, table: apikey }),
+  cache: true,
+})
+```
+
+## How It Works
+
+The Drizzle adapter:
+- Stores keys in your existing database using your Drizzle schema
+- Uses JSONB/JSON columns for metadata (PostgreSQL/MySQL/SQLite)
+- Leverages Drizzle's type-safe query builder
+- Works with your existing Drizzle migrations and tooling
+
+## Custom Column Mapping
+
+If your table uses different column names, map them:
+
+```typescript
+const store = new DrizzleStore({
+  db,
+  table: apikey,
+  columnMapping: {
+    id: 'custom_id',
+    keyHash: 'custom_key_hash',
+    metadata: 'custom_metadata',
+  },
+})
+```
+
+## Migrations
+
+Generate migrations using Drizzle Kit:
+
+```bash
+bunx drizzle-kit generate
+```
+
+Push schema changes directly:
+
+```bash
+bunx drizzle-kit push
+```
+
+## Drizzle Studio
+
+View and edit your API keys using Drizzle Studio:
+
+```bash
+bunx drizzle-kit studio
+```
+
+## Unique Features
+
+**Uses your existing Drizzle setup**: No need to create a separate database connection - uses your existing Drizzle instance.
+
+**Type-safe queries**: Full TypeScript support with Drizzle's type inference.
+
+**Custom queries**: You can use Drizzle queries directly on the `apikey` table for complex operations:
+
+```typescript
+import { apikey } from './schema'
+import { eq } from 'drizzle-orm'
+
+// Query keys directly with Drizzle
+const expiredKeys = await db
+  .select()
+  .from(apikey)
+  .where(eq(apikey.metadata.expiresAt, null))
+```
+
+## Supported Databases
+
+- PostgreSQL (with JSONB)
+- MySQL (with JSON)
+- SQLite (with JSON)
+

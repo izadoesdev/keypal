@@ -1,0 +1,56 @@
+---
+title: Quick Start
+description: Get started with keypal in minutes
+icon: Rocket
+---
+
+# Quick Start
+
+Get up and running with keypal in just a few minutes.
+
+## Basic Setup
+
+```typescript
+import { createKeys } from 'keypal'
+
+const keys = createKeys({
+  prefix: 'sk_',
+  cache: true,
+})
+```
+
+## Create Your First API Key
+
+```typescript
+const { key, record } = await keys.create({
+  ownerId: 'user_123',
+  scopes: ['read', 'write'],
+})
+
+console.log('Your API key:', key) // Only shown once!
+console.log('Key ID:', record.id)
+```
+
+## Verify an API Key
+
+```typescript
+// From headers (automatic detection)
+const result = await keys.verify(request.headers)
+
+if (result.valid) {
+  console.log('Authenticated:', result.record.metadata.ownerId)
+} else {
+  console.log('Error:', result.error)
+}
+```
+
+## Check Permissions
+
+```typescript
+if (result.valid && keys.hasScope(result.record, 'write')) {
+  // User has write permission
+}
+```
+
+That's it! You're ready to use keypal. Check out the [Configuration](/docs/getting-started/configuration) guide for more options.
+

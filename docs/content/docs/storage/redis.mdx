@@ -1,0 +1,107 @@
+---
+title: Redis Storage
+description: Redis storage adapter for distributed applications
+icon: Database
+---
+
+# Redis Storage
+
+Store API keys in Redis for persistent, distributed storage across multiple application instances.
+
+## Installation
+
+```bash
+npm install ioredis
+# or
+bun add ioredis
+```
+
+## Basic Setup
+
+```typescript
+import Redis from 'ioredis'
+import { createKeys } from 'keypal'
+
+const redis = new Redis({
+  host: 'localhost',
+  port: 6379,
+  // ... other Redis options
+})
+
+const keys = createKeys({
+  prefix: 'sk_',
+  storage: 'redis',
+  redis, // Required when using Redis storage
+})
+```
+
+## Using Redis for Both Storage and Cache
+
+You can use Redis for both storage and caching:
+
+```typescript
+const keys = createKeys({
+  prefix: 'sk_',
+  storage: 'redis',
+  cache: 'redis',  // Also use Redis for caching
+  redis,
+  cacheTtl: 300,
+})
+```
+
+## How It Works
+
+Keys are stored in Redis with the following structure:
+
+- `keypal:key:{hash}` - Full key record (JSON stringified)
+- `keypal:revoked:{hash}` - Revoked key marker with TTL
+
+When a key is revoked, it's marked in Redis with a TTL (default: 7 days). After the TTL expires, the revoked marker is automatically removed.
+
+## Configuration Options
+
+### Redis Connection
+
+Configure your Redis connection using any ioredis options:
+
+```typescript
+const redis = new Redis({
+  host: 'localhost',
+  port: 6379,
+  password: 'your-password',
+  db: 0,
+  retryStrategy: (times) => Math.min(times * 50, 2000),
+  // ... other ioredis options
+})
+```
+
+### Revoked Key TTL
+
+Control how long revoked keys are kept in Redis:
+
+```typescript
+const keys = createKeys({
+  prefix: 'sk_',
+  storage: 'redis',
+  redis,
+  revokedKeyTtl: 604800, // 7 days (default)
+  // revokedKeyTtl: 0,     // Keep revoked keys forever
+})
+```
+
+## Unique Features
+
+**Automatic TTL for revoked keys**: Revoked keys are automatically cleaned up after the TTL expires, keeping your Redis memory usage low.
+
+**Shared state across instances**: All application instances share the same Redis database, so keys created in one instance are immediately available to others.
+
+**High performance**: Redis operations are extremely fast, making it ideal for high-throughput applications.
+
+## Production Setup
+
+For production, consider:
+- Using Redis Sentinel or Cluster for high availability
+- Setting up proper authentication (`password` option)
+- Configuring memory limits and eviction policies
+- Monitoring Redis performance and memory usage
+

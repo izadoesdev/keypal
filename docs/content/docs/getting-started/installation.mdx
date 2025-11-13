@@ -1,0 +1,51 @@
+---
+title: Installation
+description: Install keypal in your project
+icon: Download
+---
+
+# Installation
+
+Install keypal using your preferred package manager:
+
+```bash
+npm install keypal
+# or
+bun add keypal
+# or
+pnpm add keypal
+# or
+yarn add keypal
+```
+
+## Optional Dependencies
+
+keypal supports multiple storage adapters. Install the ones you need:
+
+### Redis Storage
+```bash
+npm install ioredis
+```
+
+### Drizzle ORM
+```bash
+npm install drizzle-orm drizzle-kit
+```
+
+### Prisma
+```bash
+npm install @prisma/client prisma
+```
+
+### Kysely
+```bash
+npm install kysely
+```
+
+### Convex
+```bash
+npm install convex
+```
+
+These are optional peer dependencies - you only need to install the ones you plan to use.
+

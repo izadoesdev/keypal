@@ -1,0 +1,107 @@
+---
+title: Resource Scopes
+description: Fine-grained permissions for specific resources
+icon: Layers
+---
+
+# Resource Scopes
+
+Resource scopes allow you to grant permissions for specific resources (e.g., a project, website, or team).
+
+## Basic Usage
+
+```typescript
+const { key, record } = await keys.create({
+  ownerId: 'user_123',
+  scopes: ['read'], // Global scope
+  resources: {
+    'project:123': ['read', 'write'],
+    'project:456': ['read'],
+    'website:789': ['deploy', 'rollback'],
+  },
+})
+```
+
+## Using ResourceBuilder
+
+The `ResourceBuilder` provides a fluent API for building resource scopes:
+
+```typescript
+import { ResourceBuilder } from 'keypal'
+
+const resources = new ResourceBuilder()
+  .add('project', '123', ['read', 'write'])
+  .add('project', '456', ['read'])
+  .addMany('website', ['site1', 'site2'], ['read']) // Same scopes for multiple resources
+  .build()
+
+const { key, record } = await keys.create({
+  ownerId: 'user_123',
+  resources,
+})
+```
+
+## Checking Resource Scopes
+
+```typescript
+// Check if key has a specific scope for a resource
+if (keys.checkResourceScope(record, 'project', '123', 'write')) {
+  // Key has write access to project 123
+}
+
+// Check if key has any of the specified scopes
+if (keys.checkResourceAnyScope(record, 'project', '123', ['admin', 'write'])) {
+  // Key has admin or write access to project 123
+}
+
+// Check if key has all specified scopes (checks both global and resource scopes)
+if (keys.checkResourceAllScopes(record, 'project', '123', ['read', 'write'])) {
+  // Key has both read and write access (from global or resource scopes)
+}
+```
+
+## Resource Format
+
+Resources use the format: `{resourceType}:{resourceId}`
+
+Examples:
+- `project:123`
+- `website:site-abc`
+- `team:engineering`
+- `user:user_456`
+
+## Modifying Resources
+
+```typescript
+const builder = new ResourceBuilder()
+  .add('project', '123', ['read', 'write'])
+
+// Check if resource exists
+if (builder.has('project', '123')) {
+  const scopes = builder.get('project', '123')
+}
+
+// Remove specific scopes
+builder.removeScopes('project', '123', ['write'])
+
+// Remove entire resource
+builder.remove('project', '123')
+
+// Build final result
+const finalResources = builder.build()
+```
+
+## Starting from Existing Resources
+
+```typescript
+const existingResources = {
+  'project:123': ['read'],
+  'website:456': ['deploy'],
+}
+
+const updated = ResourceBuilder.from(existingResources)
+  .add('project', '123', ['write']) // Merges with existing
+  .add('team', '789', ['admin'])
+  .build()
+```
+

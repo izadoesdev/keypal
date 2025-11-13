@@ -1,0 +1,91 @@
+---
+title: Convex
+description: Convex storage adapter
+icon: Database
+---
+
+# Convex Storage
+
+Store API keys in your Convex backend. Perfect for Convex applications that need real-time capabilities.
+
+## Installation
+
+```bash
+npm install convex
+```
+
+## Setup
+
+```typescript
+import { ConvexClient } from 'convex/browser'
+import { ConvexStore } from 'keypal/convex'
+import { createKeys } from 'keypal'
+
+const convex = new ConvexClient(process.env.CONVEX_URL!)
+
+const keys = createKeys({
+  prefix: 'sk_',
+  storage: new ConvexStore({ convex }),
+  cache: true,
+})
+```
+
+## Convex Schema
+
+Define your schema in Convex:
+
+```typescript
+// convex/schema.ts
+import { defineSchema, defineTable } from 'convex/server'
+
+export default defineSchema({
+  apiKeys: defineTable({
+    keyHash: 'string',
+    metadata: 'any',
+  })
+    .index('by_keyHash', ['keyHash'])
+    .index('by_ownerId', ['metadata.ownerId']),
+})
+```
+
+## How It Works
+
+The Convex adapter:
+- Uses your Convex client instance
+- Stores keys in the `apiKeys` table
+- Leverages Convex's real-time capabilities
+- Works with Convex's type-safe query system
+
+## Unique Features
+
+**Real-time updates**: Since Convex provides real-time capabilities, you can subscribe to key changes:
+
+```typescript
+// Subscribe to key changes
+const unsubscribe = convex.query('apiKeys:get', { ownerId: 'user_123' })
+  .subscribe((keys) => {
+    console.log('Keys updated:', keys)
+  })
+```
+
+**Convex Functions**: Query keys using Convex's query functions:
+
+```typescript
+// convex/apiKeys.ts
+import { query } from './_generated/server'
+
+export const getByOwner = query({
+  args: { ownerId: 'string' },
+  handler: async (ctx, args) => {
+    return await ctx.db
+      .query('apiKeys')
+      .withIndex('by_ownerId', (q) => q.eq('metadata.ownerId', args.ownerId))
+      .collect()
+  },
+})
+```
+
+**Serverless**: No server management needed - Convex handles scaling automatically.
+
+**Type generation**: Convex generates TypeScript types from your schema, providing full type safety.
+

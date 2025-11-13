@@ -1,0 +1,46 @@
+---
+title: Memory Storage
+description: In-memory storage adapter
+icon: Database
+---
+
+# Memory Storage
+
+Memory storage is the default storage adapter. It stores keys in a JavaScript Map in memory. No setup required - it works out of the box.
+
+## Usage
+
+```typescript
+import { createKeys } from 'keypal'
+
+// Memory storage is the default - no configuration needed
+const keys = createKeys({
+  prefix: 'sk_',
+})
+
+// Or explicitly specify it
+const keys = createKeys({
+  prefix: 'sk_',
+  storage: 'memory',
+})
+```
+
+## How It Works
+
+Keys are stored in an in-memory `Map` structure:
+- Key lookups are O(1) hash table operations
+- No external dependencies
+- No network calls
+- Data exists only in the current process
+
+## Important Notes
+
+**Data is not persistent**: All keys are lost when your application restarts. This makes memory storage suitable for:
+- Local development and testing
+- Prototypes and demos
+- Single-instance applications that don't need persistence
+
+**Not distributed**: Each application instance has its own separate memory store. If you run multiple instances, they won't share keys.
+
+For production use with persistence, use [Redis](/docs/storage/redis) or a database adapter like [Drizzle](/docs/storage/drizzle).
+

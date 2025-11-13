@@ -1,0 +1,90 @@
+---
+title: keypal
+description: Secure API key management for TypeScript
+icon: Key
+---
+
+# keypal
+
+A TypeScript library for secure API key management with cryptographic hashing, expiration, scopes, and pluggable storage.
+
+## Features
+
+- **Secure by Default**: SHA-256/SHA-512 hashing with optional salt and timing-safe comparison
+- **Smart Key Detection**: Automatically extracts keys from `Authorization`, `x-api-key`, or custom headers
+- **Built-in Caching**: Optional in-memory or Redis caching for validated keys
+- **Flexible Storage**: Memory, Redis, Drizzle ORM, Prisma, Kysely, and Convex adapters included
+- **Scope-based Permissions**: Fine-grained access control with resource-specific scopes
+- **Tags**: Organize and find keys by tags
+- **Key Management**: Enable/disable, rotate, and soft-revoke keys with audit trails
+- **Audit Logging**: Track who did what, when, and why (opt-in)
+- **TypeScript**: Full type safety
+- **Zero Config**: Works out of the box with sensible defaults
+
+## Quick Start
+
+```typescript
+import { createKeys } from 'keypal'
+
+const keys = createKeys({
+  prefix: 'sk_',
+  cache: true,
+})
+
+// Create a key
+const { key, record } = await keys.create({
+  ownerId: 'user_123',
+  scopes: ['read', 'write'],
+})
+
+// Verify from headers
+const result = await keys.verify(request.headers)
+if (result.valid) {
+  console.log('Authenticated:', result.record.metadata.ownerId)
+}
+```
+
+## Get Started
+
+<Cards>
+  <Card
+    title="Installation"
+    description="Install keypal in your project"
+    href="/docs/getting-started/installation"
+  />
+  <Card
+    title="Quick Start"
+    description="Get up and running in minutes"
+    href="/docs/getting-started/quick-start"
+  />
+  <Card
+    title="Configuration"
+    description="Configure keypal to fit your needs"
+    href="/docs/getting-started/configuration"
+  />
+</Cards>
+
+## Documentation
+
+<Cards>
+  <Card
+    title="Concepts"
+    description="Learn about API keys, scopes, permissions, and more"
+    href="/docs/concepts/api-keys"
+  />
+  <Card
+    title="Storage Adapters"
+    description="Choose the right storage backend"
+    href="/docs/storage/overview"
+  />
+  <Card
+    title="Utilities"
+    description="Helper functions and utilities"
+    href="/docs/utilities/standalone-functions"
+  />
+  <Card
+    title="API Reference"
+    description="Complete API documentation"
+    href="/docs/api-reference/create-keys"
+  />
+</Cards>

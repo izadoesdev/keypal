@@ -1,0 +1,116 @@
+---
+title: Utilities
+description: Helper methods and utilities
+icon: Wrench
+---
+
+# Utilities
+
+Helper methods for working with API keys.
+
+## Key Detection
+
+### hasKey()
+
+Check if headers contain an API key.
+
+```typescript
+if (keys.hasKey(request.headers)) {
+  const key = keys.extractKey(request.headers)
+}
+```
+
+**Returns**: `boolean`
+
+### extractKey()
+
+Extract API key from headers.
+
+```typescript
+const key = keys.extractKey(request.headers)
+// Returns: string | null
+```
+
+**Returns**: `string | null`
+
+## Key Generation
+
+### generateKey()
+
+Generate a new key without saving it.
+
+```typescript
+const newKey = keys.generateKey()
+// Returns: 'sk_abc123xyz456...'
+```
+
+**Returns**: `string`
+
+### hashKey()
+
+Hash a key (useful for custom storage implementations).
+
+```typescript
+const hash = keys.hashKey('sk_abc123')
+```
+
+**Returns**: `string`
+
+### validateKey()
+
+Validate a key against a stored hash.
+
+```typescript
+const isValid = keys.validateKey('sk_abc123', storedHash)
+```
+
+**Returns**: `boolean`
+
+## Cache Management
+
+### invalidateCache()
+
+Manually invalidate a cached key.
+
+```typescript
+await keys.invalidateCache(keyHash)
+```
+
+**Returns**: `Promise<void>`
+
+## Standalone Functions
+
+These functions can be used without a manager instance:
+
+```typescript
+import {
+  isExpired,
+  getExpirationTime,
+  extractKeyFromHeaders,
+  hasApiKey,
+  hasScope,
+  hasAnyScope,
+  hasAllScopes,
+} from 'keypal'
+
+// Check expiration
+const expired = isExpired('2025-12-31T00:00:00.000Z')
+const expirationDate = getExpirationTime('2025-12-31T00:00:00.000Z') // Date | null
+
+// Extract key from headers
+const key = extractKeyFromHeaders(request.headers, {
+  headerNames: ['x-api-key'],
+  extractBearer: true,
+})
+
+// Check if headers have API key
+if (hasApiKey(request.headers)) {
+  const key = extractKeyFromHeaders(request.headers)
+}
+
+// Check scopes (for plain scope arrays, not records)
+const hasWrite = hasScope(['read', 'write'], 'write')
+const hasAny = hasAnyScope(['read', 'write'], ['admin', 'write'])
+const hasAll = hasAllScopes(['read', 'write'], ['read', 'write'])
+```
+

@@ -1,0 +1,44 @@
+---
+title: Storage Overview
+description: Overview of storage adapters
+icon: Database
+---
+
+# Storage Adapters
+
+keypal supports multiple storage backends for persisting API keys. Choose the one that fits your infrastructure.
+
+## Available Adapters
+
+- **Memory** - In-memory storage (default, not persistent)
+- **Redis** - Redis storage for distributed applications
+- **Drizzle ORM** - PostgreSQL, MySQL, SQLite via Drizzle
+- **Prisma** - PostgreSQL, MySQL, SQLite via Prisma
+- **Kysely** - Type-safe SQL query builder
+- **Convex** - Convex backend storage
+
+## Choosing a Storage Adapter
+
+### Use Memory When:
+- Building prototypes or demos
+- Testing locally
+- You don't need persistence
+
+### Use Redis When:
+- You need distributed storage
+- You want high performance
+- You're already using Redis
+
+### Use Drizzle/Prisma/Kysely When:
+- You need persistent storage in a database
+- You want to use your existing database
+- You need complex queries
+
+### Use Convex When:
+- You're building with Convex
+- You want real-time capabilities
+
+## Custom Storage
+
+You can also implement your own storage adapter by implementing the `Storage` interface. See [Custom Storage](/docs/storage/custom-storage) for details.
+

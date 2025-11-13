@@ -1,0 +1,125 @@
+---
+title: Kysely
+description: Kysely storage adapter
+icon: Database
+---
+
+# Kysely Storage
+
+Store API keys using Kysely's type-safe SQL query builder. Works with PostgreSQL, MySQL, and SQLite.
+
+## Installation
+
+```bash
+npm install kysely
+# For PostgreSQL
+npm install pg
+# For MySQL
+npm install mysql2
+```
+
+## Database Schema
+
+Create the table in your database:
+
+```sql
+CREATE TABLE api_keys (
+  id TEXT PRIMARY KEY,
+  key_hash TEXT UNIQUE NOT NULL,
+  metadata JSONB NOT NULL
+);
+
+CREATE INDEX api_keys_key_hash_idx ON api_keys(key_hash);
+```
+
+For MySQL, use `JSON` instead of `JSONB`:
+
+```sql
+CREATE TABLE api_keys (
+  id TEXT PRIMARY KEY,
+  key_hash TEXT UNIQUE NOT NULL,
+  metadata JSON NOT NULL
+);
+
+CREATE INDEX api_keys_key_hash_idx ON api_keys(key_hash);
+```
+
+## Setup
+
+```typescript
+import { Kysely, PostgresDialect } from 'kysely'
+import { Pool } from 'pg'
+import { KyselyStore } from 'keypal/kysely'
+import { createKeys } from 'keypal'
+
+const db = new Kysely<Database>({
+  dialect: new PostgresDialect({
+    pool: new Pool({
+      connectionString: process.env.DATABASE_URL,
+    }),
+  }),
+})
+
+const keys = createKeys({
+  prefix: 'sk_prod_',
+  storage: new KyselyStore({ db, tableName: 'api_keys' }),
+  cache: true,
+})
+```
+
+## How It Works
+
+The Kysely adapter:
+- Uses your existing Kysely database instance
+- Stores metadata as JSONB/JSON in the `metadata` column
+- Leverages Kysely's type-safe query builder
+- Works with your existing Kysely migrations
+
+## Custom Table Name
+
+Specify a different table name:
+
+```typescript
+const store = new KyselyStore({
+  db,
+  tableName: 'custom_api_keys', // Your table name
+})
+```
+
+## Type Definitions
+
+Define your database types for full type safety:
+
+```typescript
+interface Database {
+  api_keys: {
+    id: string
+    key_hash: string
+    metadata: unknown // or a more specific type
+  }
+}
+```
+
+## Unique Features
+
+**Type-safe SQL queries**: Use Kysely's query builder for complex operations:
+
+```typescript
+// Query keys directly with Kysely
+const expiredKeys = await db
+  .selectFrom('api_keys')
+  .selectAll()
+  .where('metadata', '->', 'expiresAt', 'is not', null)
+  .execute()
+```
+
+**Works with your existing Kysely setup**: No need for a separate database connection - uses your existing Kysely instance.
+
+**Full SQL control**: Since Kysely is a SQL query builder, you have full control over queries and can use raw SQL when needed.
+
+## Supported Databases
+
+- PostgreSQL (with JSONB)
+- MySQL (with JSON)
+- SQLite (with JSON)
+

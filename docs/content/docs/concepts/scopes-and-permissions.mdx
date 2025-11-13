@@ -1,0 +1,69 @@
+---
+title: Scopes & Permissions
+description: Control access with scopes and permissions
+icon: Shield
+---
+
+# Scopes & Permissions
+
+Scopes define what actions an API key can perform. They're simple string arrays that you define based on your application's needs.
+
+## Global Scopes
+
+Global scopes apply to all resources:
+
+```typescript
+const { key, record } = await keys.create({
+  ownerId: 'user_123',
+  scopes: ['read', 'write', 'admin'],
+})
+```
+
+## Checking Scopes
+
+```typescript
+// Check if key has a specific scope
+if (keys.hasScope(record, 'write')) {
+  // User can write
+}
+
+// Check if key has any of the specified scopes
+if (keys.hasAnyScope(record, ['admin', 'moderator'])) {
+  // User has admin or moderator access
+}
+
+// Check if key has all specified scopes
+if (keys.hasAllScopes(record, ['read', 'write'])) {
+  // User has both read and write access
+}
+```
+
+## Common Scope Patterns
+
+### REST API Pattern
+```typescript
+scopes: ['GET', 'POST', 'PUT', 'DELETE']
+```
+
+### CRUD Pattern
+```typescript
+scopes: ['create', 'read', 'update', 'delete']
+```
+
+### Role-Based Pattern
+```typescript
+scopes: ['user', 'admin', 'moderator']
+```
+
+### Feature-Based Pattern
+```typescript
+scopes: ['analytics', 'reports', 'exports']
+```
+
+## Scope Best Practices
+
+1. **Use descriptive names**: `'read:users'` is better than `'r'`
+2. **Follow a consistent pattern**: Choose one pattern and stick with it
+3. **Use least privilege**: Only grant the minimum scopes needed
+4. **Document your scopes**: Keep a list of all valid scopes
+

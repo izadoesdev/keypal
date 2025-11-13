@@ -1,0 +1,66 @@
+---
+title: Expiration
+description: Set expiration dates for API keys
+icon: Clock
+---
+
+# Expiration
+
+API keys can have expiration dates to automatically invalidate them after a certain time.
+
+## Setting Expiration
+
+```typescript
+const { key, record } = await keys.create({
+  ownerId: 'user_123',
+  scopes: ['read', 'write'],
+  expiresAt: '2025-12-31T23:59:59.000Z', // ISO timestamp
+})
+```
+
+## Checking Expiration
+
+```typescript
+// Check if a key is expired
+if (keys.isExpired(record)) {
+  // Key has expired
+}
+
+// Using standalone function
+import { isExpired } from 'keypal'
+
+if (isExpired(record.metadata.expiresAt)) {
+  // Key has expired
+}
+```
+
+## Expiration During Verification
+
+Expired keys are automatically rejected during verification:
+
+```typescript
+const result = await keys.verify(key)
+
+if (!result.valid && result.errorCode === ApiKeyErrorCode.EXPIRED) {
+  // Key has expired
+}
+```
+
+## Never Expiring Keys
+
+Set `expiresAt` to `null` for keys that never expire:
+
+```typescript
+const { key, record } = await keys.create({
+  ownerId: 'user_123',
+  expiresAt: null, // Never expires
+})
+```
+
+## Best Practices
+
+1. **Always set expiration dates** for production keys
+2. **Use reasonable expiration periods** (e.g., 90 days, 1 year)
+3. **Implement key rotation** before expiration
+4. **Monitor expiration dates** and notify users before keys expire
+

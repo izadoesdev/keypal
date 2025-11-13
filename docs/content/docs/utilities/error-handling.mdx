@@ -1,0 +1,180 @@
+---
+title: Error Handling
+description: Handle errors gracefully
+icon: AlertCircle
+---
+
+# Error Handling
+
+keypal provides comprehensive error handling with specific error codes for different scenarios.
+
+## Error Codes
+
+```typescript
+import { ApiKeyErrorCode } from 'keypal'
+
+// All available error codes:
+ApiKeyErrorCode.MISSING_KEY              // No API key provided
+ApiKeyErrorCode.INVALID_FORMAT           // API key format is invalid
+ApiKeyErrorCode.INVALID_KEY              // API key does not exist
+ApiKeyErrorCode.EXPIRED                  // API key has expired
+ApiKeyErrorCode.REVOKED                  // API key has been revoked
+ApiKeyErrorCode.DISABLED                 // API key is disabled
+ApiKeyErrorCode.STORAGE_ERROR            // Storage operation failed
+ApiKeyErrorCode.CACHE_ERROR              // Cache operation failed
+ApiKeyErrorCode.ALREADY_REVOKED          // Key is already revoked
+ApiKeyErrorCode.ALREADY_ENABLED          // Key is already enabled
+ApiKeyErrorCode.ALREADY_DISABLED         // Key is already disabled
+ApiKeyErrorCode.CANNOT_MODIFY_REVOKED    // Cannot modify revoked key
+ApiKeyErrorCode.KEY_NOT_FOUND            // API key not found
+ApiKeyErrorCode.AUDIT_LOGGING_DISABLED   // Audit logging not enabled
+ApiKeyErrorCode.STORAGE_NOT_SUPPORTED    // Storage doesn't support operation
+```
+
+## Verification Errors
+
+```typescript
+const result = await keys.verify(request.headers)
+
+if (!result.valid) {
+  switch (result.errorCode) {
+    case ApiKeyErrorCode.MISSING_KEY:
+      return { error: 'API key is required', statusCode: 401 }
+    
+    case ApiKeyErrorCode.INVALID_FORMAT:
+      return { error: 'Invalid API key format', statusCode: 401 }
+    
+    case ApiKeyErrorCode.INVALID_KEY:
+      return { error: 'Invalid API key', statusCode: 401 }
+    
+    case ApiKeyErrorCode.EXPIRED:
+      return { error: 'API key has expired', statusCode: 401 }
+    
+    case ApiKeyErrorCode.REVOKED:
+      return { error: 'API key has been revoked', statusCode: 401 }
+    
+    case ApiKeyErrorCode.DISABLED:
+      return { error: 'API key is disabled', statusCode: 403 }
+    
+    default:
+      return { error: 'Authentication failed', statusCode: 401 }
+  }
+}
+```
+
+## Operation Errors
+
+### Creating Keys
+
+```typescript
+try {
+  const { key, record } = await keys.create({
+    ownerId: 'user_123',
+    scopes: ['read', 'write'],
+  })
+  
+  return { success: true, key, keyId: record.id }
+} catch (error) {
+  if (error.code === ApiKeyErrorCode.STORAGE_ERROR) {
+    return { success: false, error: 'Failed to create key' }
+  }
+  throw error
+}
+```
+
+### Revoking Keys
+
+```typescript
+try {
+  await keys.revoke(keyId, {
+    userId: 'admin_123',
+    metadata: { reason: 'User request' },
+  })
+} catch (error) {
+  if (error.code === ApiKeyErrorCode.KEY_NOT_FOUND) {
+    return { error: 'Key not found', statusCode: 404 }
+  }
+  if (error.code === ApiKeyErrorCode.ALREADY_REVOKED) {
+    return { error: 'Key is already revoked', statusCode: 400 }
+  }
+  throw error
+}
+```
+
+### Enabling/Disabling Keys
+
+```typescript
+try {
+  await keys.enable(keyId)
+} catch (error) {
+  if (error.code === ApiKeyErrorCode.KEY_NOT_FOUND) {
+    return { error: 'Key not found', statusCode: 404 }
+  }
+  if (error.code === ApiKeyErrorCode.ALREADY_ENABLED) {
+    return { message: 'Key was already enabled', statusCode: 200 }
+  }
+  if (error.code === ApiKeyErrorCode.CANNOT_MODIFY_REVOKED) {
+    return { error: 'Cannot enable a revoked key', statusCode: 400 }
+  }
+  throw error
+}
+```
+
+### Rotating Keys
+
+```typescript
+try {
+  const { key: newKey, record, oldRecord } = await keys.rotate(keyId, {
+    scopes: ['read', 'write', 'admin'],
+  })
+  return { success: true, key: newKey, keyId: record.id }
+} catch (error) {
+  if (error.code === ApiKeyErrorCode.KEY_NOT_FOUND) {
+    return { error: 'Key not found', statusCode: 404 }
+  }
+  if (error.code === ApiKeyErrorCode.CANNOT_MODIFY_REVOKED) {
+    return { error: 'Cannot rotate a revoked key', statusCode: 400 }
+  }
+  throw error
+}
+```
+
+## Creating Custom Errors
+
+```typescript
+import { createApiKeyError, ApiKeyErrorCode } from 'keypal'
+
+const error = createApiKeyError(ApiKeyErrorCode.INVALID_KEY, {
+  attemptedKey: 'sk_abc123',
+  timestamp: new Date().toISOString(),
+})
+
+// Error structure:
+// {
+//   code: 'INVALID_KEY',
+//   message: 'Invalid API key',
+//   details: { attemptedKey: 'sk_abc123', timestamp: '...' }
+// }
+```
+
+## Error Type
+
+```typescript
+import type { ApiKeyError } from 'keypal'
+
+// ApiKeyError structure:
+{
+  code: ApiKeyErrorCode
+  message: string
+  details?: unknown
+}
+```
+
+## Best Practices
+
+1. **Always check `result.valid`** before accessing `result.record`
+2. **Use error codes** for programmatic error handling
+3. **Provide user-friendly messages** based on error codes
+4. **Log errors** for debugging and monitoring
+5. **Handle storage errors** gracefully with retries when appropriate
+

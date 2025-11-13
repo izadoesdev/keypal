@@ -1,0 +1,89 @@
+---
+title: Configuration
+description: Configure keypal to fit your needs
+icon: Settings
+---
+
+# Configuration
+
+keypal is highly configurable. Here are all the available options:
+
+## Basic Configuration
+
+```typescript
+import { createKeys } from 'keypal'
+
+const keys = createKeys({
+  // Key generation
+  prefix: 'sk_prod_',
+  length: 32,
+  alphabet: 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789',
+  
+  // Security
+  algorithm: 'sha256',  // or 'sha512'
+  salt: process.env.API_KEY_SALT,
+  
+  // Storage
+  storage: 'memory',  // or 'redis' or custom Storage instance
+  
+  // Caching
+  cache: true,       // in-memory cache
+  cacheTtl: 60,      // Cache TTL in seconds
+  
+  // Header detection
+  headerNames: ['authorization', 'x-api-key'],
+  extractBearer: true,
+  
+  // Usage tracking
+  autoTrackUsage: true,
+  
+  // Audit logging
+  auditLogs: true,
+  auditContext: {
+    userId: 'system',
+    metadata: { service: 'api' }
+  },
+})
+```
+
+## Configuration Options
+
+### Key Generation
+
+- **`prefix`** (string, optional): Prefix for all generated keys (e.g., `'sk_live_'`)
+- **`length`** (number, optional): Length of generated key excluding prefix (default: `32`)
+- **`alphabet`** (string, optional): Custom alphabet for key generation (default: URL-safe base64)
+
+### Security
+
+- **`algorithm`** (`'sha256'` | `'sha512'`, optional): Hashing algorithm (default: `'sha256'`)
+- **`salt`** (string, optional): Salt for hashing (recommended for production)
+
+### Storage
+
+- **`storage`** (`'memory'` | `'redis'` | Storage, optional): Storage backend (default: `'memory'`)
+- **`redis`** (Redis, optional): Redis client instance (required when using Redis storage)
+
+### Caching
+
+- **`cache`** (`true` | `'redis'` | Cache | `false`, optional): Caching strategy (default: `false`)
+- **`cacheTtl`** (number, optional): Cache TTL in seconds (default: `60`)
+
+### Header Detection
+
+- **`headerNames`** (string[], optional): HTTP header names to look for API keys (default: `['authorization', 'x-api-key']`)
+- **`extractBearer`** (boolean, optional): Extract Bearer token from Authorization header (default: `true`)
+
+### Usage Tracking
+
+- **`autoTrackUsage`** (boolean, optional): Automatically update `lastUsedAt` on verify (default: `true`)
+
+### Audit Logging
+
+- **`auditLogs`** (boolean, optional): Enable audit logging (default: `false`)
+- **`auditContext`** (ActionContext, optional): Default context for all audit logs
+
+### Revocation
+
+- **`revokedKeyTtl`** (number, optional): TTL in seconds for revoked keys in Redis (default: `604800` / 7 days, set to `0` to keep forever)
+

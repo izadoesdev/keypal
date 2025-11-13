@@ -1,0 +1,48 @@
+---
+title: API Keys
+description: Understanding API keys in keypal
+icon: Key
+---
+
+# API Keys
+
+API keys in keypal are secure, cryptographically hashed tokens used for authentication and authorization.
+
+## Key Format
+
+Keys are generated with a configurable prefix and random string:
+
+```
+sk_live_abc123xyz456...
+```
+
+- **Prefix**: Identifies the key type (e.g., `sk_live_`, `sk_test_`)
+- **Random String**: Cryptographically secure random characters
+
+## Key Lifecycle
+
+1. **Creation**: Keys are generated and hashed before storage
+2. **Storage**: Only the hash is stored, never the plain key
+3. **Verification**: Keys are hashed and compared against stored hashes
+4. **Revocation**: Keys can be soft-deleted (kept for audit trails)
+5. **Rotation**: Old keys can be replaced with new ones
+
+## Security Features
+
+- **Cryptographic Hashing**: SHA-256 or SHA-512 hashing
+- **Salt Support**: Optional salt for additional security
+- **Timing-Safe Comparison**: Prevents timing attacks
+- **Never Stored Plain**: Only hashes are stored in your database
+
+## Key Metadata
+
+Each key stores metadata including:
+
+- Owner ID
+- Scopes/permissions
+- Resource-specific permissions
+- Expiration date
+- Tags
+- Usage tracking (last used, created date)
+- Status (enabled/disabled, revoked)
+

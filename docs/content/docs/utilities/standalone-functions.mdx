@@ -1,0 +1,170 @@
+---
+title: Standalone Functions
+description: Use keypal functions without a manager instance
+icon: FunctionSquare
+---
+
+# Standalone Functions
+
+These functions can be used without creating a manager instance. Useful for utilities, validators, or when you only need specific functionality.
+
+## Expiration Functions
+
+### isExpired()
+
+Check if an expiration date has passed.
+
+```typescript
+import { isExpired } from 'keypal'
+
+const expired = isExpired('2025-12-31T00:00:00.000Z')
+// Returns: boolean
+```
+
+### getExpirationTime()
+
+Get the expiration time as a Date object.
+
+```typescript
+import { getExpirationTime } from 'keypal'
+
+const expirationDate = getExpirationTime('2025-12-31T00:00:00.000Z')
+// Returns: Date | null
+```
+
+## Key Extraction Functions
+
+### extractKeyFromHeaders()
+
+Extract API key from HTTP headers.
+
+```typescript
+import { extractKeyFromHeaders } from 'keypal'
+
+const key = extractKeyFromHeaders(request.headers, {
+  headerNames: ['x-api-key'],
+  extractBearer: true,
+})
+// Returns: string | null
+```
+
+### hasApiKey()
+
+Check if headers contain an API key.
+
+```typescript
+import { hasApiKey } from 'keypal'
+
+if (hasApiKey(request.headers)) {
+  const key = extractKeyFromHeaders(request.headers)
+}
+// Returns: boolean
+```
+
+## Scope Functions
+
+These functions work with plain scope arrays (not ApiKeyRecord objects).
+
+### hasScope()
+
+Check if scopes include a specific scope.
+
+```typescript
+import { hasScope } from 'keypal'
+
+const hasWrite = hasScope(['read', 'write'], 'write')
+// Returns: boolean
+```
+
+### hasAnyScope()
+
+Check if scopes include any of the specified scopes.
+
+```typescript
+import { hasAnyScope } from 'keypal'
+
+const hasAny = hasAnyScope(['read', 'write'], ['admin', 'write'])
+// Returns: boolean
+```
+
+### hasAllScopes()
+
+Check if scopes include all of the specified scopes.
+
+```typescript
+import { hasAllScopes } from 'keypal'
+
+const hasAll = hasAllScopes(['read', 'write'], ['read', 'write'])
+// Returns: boolean
+```
+
+## Error Functions
+
+### createApiKeyError()
+
+Create a custom API key error.
+
+```typescript
+import { createApiKeyError, ApiKeyErrorCode } from 'keypal'
+
+const error = createApiKeyError(ApiKeyErrorCode.INVALID_KEY, {
+  attemptedKey: 'sk_abc123',
+})
+```
+
+### ApiKeyErrorCode
+
+All available error codes:
+
+```typescript
+import { ApiKeyErrorCode } from 'keypal'
+
+// Error codes:
+ApiKeyErrorCode.MISSING_KEY
+ApiKeyErrorCode.INVALID_FORMAT
+ApiKeyErrorCode.INVALID_KEY
+ApiKeyErrorCode.EXPIRED
+ApiKeyErrorCode.REVOKED
+ApiKeyErrorCode.DISABLED
+ApiKeyErrorCode.STORAGE_ERROR
+ApiKeyErrorCode.CACHE_ERROR
+ApiKeyErrorCode.ALREADY_REVOKED
+ApiKeyErrorCode.ALREADY_ENABLED
+ApiKeyErrorCode.ALREADY_DISABLED
+ApiKeyErrorCode.CANNOT_MODIFY_REVOKED
+ApiKeyErrorCode.KEY_NOT_FOUND
+ApiKeyErrorCode.AUDIT_LOGGING_DISABLED
+ApiKeyErrorCode.STORAGE_NOT_SUPPORTED
+```
+
+## Usage Examples
+
+### Middleware Validation
+
+```typescript
+import { hasApiKey, extractKeyFromHeaders } from 'keypal'
+
+function validateApiKey(req, res, next) {
+  if (!hasApiKey(req.headers)) {
+    return res.status(401).json({ error: 'Missing API key' })
+  }
+  
+  const key = extractKeyFromHeaders(req.headers)
+  // ... validate key
+  next()
+}
+```
+
+### Scope Validation
+
+```typescript
+import { hasScope, hasAnyScope } from 'keypal'
+
+function requireScope(scopes: string[], required: string | string[]) {
+  if (typeof required === 'string') {
+    return hasScope(scopes, required)
+  }
+  return hasAnyScope(scopes, required)
+}
+```
+

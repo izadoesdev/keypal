@@ -1,0 +1,65 @@
+---
+title: Tags
+description: Organize and find API keys using tags
+icon: Tag
+---
+
+# Tags
+
+Tags help you organize and find API keys. They're simple string arrays that you can use to categorize keys.
+
+## Adding Tags
+
+```typescript
+const { key, record } = await keys.create({
+  ownerId: 'user_123',
+  scopes: ['read', 'write'],
+  tags: ['production', 'api', 'v2'],
+})
+```
+
+## Finding Keys by Tags
+
+```typescript
+// Find keys with a specific tag
+const productionKeys = await keys.findByTag('production')
+
+// Find keys with a specific tag for a specific owner
+const userProductionKeys = await keys.findByTag('production', 'user_123')
+
+// Find keys with any of the specified tags
+const taggedKeys = await keys.findByTags(['production', 'staging'])
+
+// Find keys with any tag for a specific owner
+const userTaggedKeys = await keys.findByTags(['production', 'staging'], 'user_123')
+```
+
+## Common Tag Patterns
+
+### Environment Tags
+```typescript
+tags: ['production', 'staging', 'development']
+```
+
+### Service Tags
+```typescript
+tags: ['api', 'webhook', 'cli']
+```
+
+### Version Tags
+```typescript
+tags: ['v1', 'v2', 'legacy']
+```
+
+### Purpose Tags
+```typescript
+tags: ['read-only', 'full-access', 'temporary']
+```
+
+## Use Cases
+
+- **Environment filtering**: Find all production keys
+- **Service categorization**: Group keys by service type
+- **Bulk operations**: Revoke all keys with a specific tag
+- **Analytics**: Track key usage by category
+

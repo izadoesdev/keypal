@@ -49,17 +49,17 @@ describe("KyselyStore", () => {
 		await sql`
 			CREATE TABLE IF NOT EXISTS apikey (
 				id TEXT PRIMARY KEY NOT NULL,
-				key_hash TEXT NOT NULL,
+				"keyHash" TEXT NOT NULL,
 				metadata JSONB NOT NULL
 			)
 		`.execute(db);
 
 		await sql`
-			CREATE INDEX IF NOT EXISTS apikey_key_hash_idx ON apikey(key_hash)
+			CREATE INDEX IF NOT EXISTS apikey_key_hash_idx ON apikey("keyHash")
 		`.execute(db);
 
 		await sql`
-			CREATE UNIQUE INDEX IF NOT EXISTS apikey_key_hash_unique ON apikey(key_hash)
+			CREATE UNIQUE INDEX IF NOT EXISTS apikey_key_hash_unique ON apikey("keyHash")
 		`.execute(db);
 
 		store = new KyselyStore({ db, table: "apikey" });

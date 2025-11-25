@@ -7,70 +7,120 @@ import type {
 import type { Storage } from "../types/storage-types";
 
 export class MemoryStore implements Storage {
-	private readonly keys: Map<string, ApiKeyRecord> = new Map();
-	private readonly logs: Map<string, AuditLog> = new Map();
+	private readonly keys = new Map<string, ApiKeyRecord>();
+	private readonly hashIndex = new Map<string, string>();
+	private readonly ownerIndex = new Map<string, Set<string>>();
+	private readonly logs = new Map<string, AuditLog>();
 
 	async save(record: ApiKeyRecord): Promise<void> {
-		const existing = await this.findById(record.id);
-		if (existing) {
+		if (this.keys.has(record.id)) {
 			throw new Error(`API key with id ${record.id} already exists`);
 		}
-		await this.keys.set(record.id, record);
+		if (this.hashIndex.has(record.keyHash)) {
+			throw new Error("API key hash collision detected");
+		}
+
+		this.keys.set(record.id, record);
+		this.hashIndex.set(record.keyHash, record.id);
+
+		const { ownerId } = record.metadata;
+		if (ownerId) {
+			const ownerKeys = this.ownerIndex.get(ownerId) ?? new Set();
+			ownerKeys.add(record.id);
+			this.ownerIndex.set(ownerId, ownerKeys);
+		}
 	}
 
 	async findByHash(keyHash: string): Promise<ApiKeyRecord | null> {
-		for (const record of await this.keys.values()) {
-			if (record.keyHash === keyHash) {
-				return record;
-			}
-		}
-		return null;
+		const id = this.hashIndex.get(keyHash);
+		return id ? this.keys.get(id) ?? null : null;
 	}
 
 	async findById(id: string): Promise<ApiKeyRecord | null> {
-		return (await this.keys.get(id)) ?? null;
+		return this.keys.get(id) ?? null;
 	}
 
 	async findByOwner(ownerId: string): Promise<ApiKeyRecord[]> {
-		return Array.from(await this.keys.values()).filter(
-			(record) => record.metadata.ownerId === ownerId
-		);
+		const ids = this.ownerIndex.get(ownerId);
+		if (!ids?.size) return [];
+
+		const records: ApiKeyRecord[] = [];
+		for (const id of ids) {
+			const record = this.keys.get(id);
+			if (record) records.push(record);
+		}
+		return records;
 	}
 
 	async findByTags(tags: string[], ownerId?: string): Promise<ApiKeyRecord[]> {
-		return Array.from(await this.keys.values()).filter((record) => {
-			if (ownerId !== undefined && record.metadata.ownerId !== ownerId) {
-				return false;
-			}
-			return tags.some((t) => record.metadata.tags?.includes(t.toLowerCase()));
-		});
+		const lowercaseTags = tags.map((t) => t.toLowerCase());
+		const records =
+			ownerId !== undefined
+				? await this.findByOwner(ownerId)
+				: Array.from(this.keys.values());
+
+		return records.filter((record) =>
+			lowercaseTags.some((t) => record.metadata.tags?.includes(t))
+		);
 	}
 
 	async findByTag(tag: string, ownerId?: string): Promise<ApiKeyRecord[]> {
-		return await this.findByTags([tag], ownerId);
+		return this.findByTags([tag], ownerId);
 	}
 
 	async updateMetadata(
 		id: string,
 		metadata: Partial<ApiKeyMetadata>
 	): Promise<void> {
-		const record = await this.keys.get(id);
+		const record = this.keys.get(id);
 		if (!record) {
 			throw new Error(`API key with id ${id} not found`);
 		}
+
+		const oldOwnerId = record.metadata.ownerId;
 		record.metadata = { ...record.metadata, ...metadata };
+		const newOwnerId = record.metadata.ownerId;
+
+		if (oldOwnerId !== newOwnerId) {
+			if (oldOwnerId) {
+				const oldOwnerKeys = this.ownerIndex.get(oldOwnerId);
+				oldOwnerKeys?.delete(id);
+				if (oldOwnerKeys?.size === 0) this.ownerIndex.delete(oldOwnerId);
+			}
+			if (newOwnerId) {
+				const newOwnerKeys = this.ownerIndex.get(newOwnerId) ?? new Set();
+				newOwnerKeys.add(id);
+				this.ownerIndex.set(newOwnerId, newOwnerKeys);
+			}
+		}
 	}
 
 	async delete(id: string): Promise<void> {
-		await this.keys.delete(id);
+		const record = this.keys.get(id);
+		if (record) {
+			this.hashIndex.delete(record.keyHash);
+			const { ownerId } = record.metadata;
+			if (ownerId) {
+				const ownerKeys = this.ownerIndex.get(ownerId);
+				ownerKeys?.delete(id);
+				if (ownerKeys?.size === 0) this.ownerIndex.delete(ownerId);
+			}
+		}
+		this.keys.delete(id);
 	}
 
 	async deleteByOwner(ownerId: string): Promise<void> {
-		for (const [id, record] of await this.keys.entries()) {
-			if (record.metadata.ownerId === ownerId) {
+		const ids = this.ownerIndex.get(ownerId);
+		if (!ids) return;
+
+		for (const id of ids) {
+			const record = this.keys.get(id);
+			if (record) {
+				this.hashIndex.delete(record.keyHash);
 				this.keys.delete(id);
 			}
 		}
+		this.ownerIndex.delete(ownerId);
 	}
 
 	saveLog(log: AuditLog): Promise<void> {
@@ -81,68 +131,34 @@ export class MemoryStore implements Storage {
 	findLogs(query: AuditLogQuery): Promise<AuditLog[]> {
 		let logs = Array.from(this.logs.values());
 
-		// Filter by keyId
-		if (query.keyId) {
-			logs = logs.filter((log) => log.keyId === query.keyId);
-		}
-
-		// Filter by ownerId
-		if (query.ownerId) {
+		if (query.keyId) logs = logs.filter((log) => log.keyId === query.keyId);
+		if (query.ownerId)
 			logs = logs.filter((log) => log.ownerId === query.ownerId);
-		}
+		if (query.action) logs = logs.filter((log) => log.action === query.action);
+		if (query.startDate)
+			logs = logs.filter((log) => log.timestamp >= query.startDate!);
+		if (query.endDate)
+			logs = logs.filter((log) => log.timestamp <= query.endDate!);
 
-		// Filter by action
-		if (query.action) {
-			logs = logs.filter((log) => log.action === query.action);
-		}
-
-		// Filter by date range
-		if (query.startDate) {
-			const startDate = query.startDate;
-			logs = logs.filter((log) => log.timestamp >= startDate);
-		}
-
-		if (query.endDate) {
-			const endDate = query.endDate;
-			logs = logs.filter((log) => log.timestamp <= endDate);
-		}
-
-		// Sort by timestamp descending (most recent first)
 		logs.sort((a, b) => b.timestamp.localeCompare(a.timestamp));
 
-		// Apply pagination
 		const offset = query.offset ?? 0;
-		// biome-ignore lint/style/noMagicNumbers: Default limit of 100
+		// biome-ignore lint/style/noMagicNumbers: Default limit
 		const limit = query.limit ?? 100;
-
 		return Promise.resolve(logs.slice(offset, offset + limit));
 	}
 
 	countLogs(query: AuditLogQuery): Promise<number> {
 		let logs = Array.from(this.logs.values());
 
-		// Apply same filters as findLogs
-		if (query.keyId) {
-			logs = logs.filter((log) => log.keyId === query.keyId);
-		}
-
-		if (query.ownerId) {
+		if (query.keyId) logs = logs.filter((log) => log.keyId === query.keyId);
+		if (query.ownerId)
 			logs = logs.filter((log) => log.ownerId === query.ownerId);
-		}
-
-		if (query.action) {
-			logs = logs.filter((log) => log.action === query.action);
-		}
-
-		if (query.startDate) {
-			const startDate = query.startDate;
-			logs = logs.filter((log) => log.timestamp >= startDate);
-		}
-
-		if (query.endDate) {
-			const endDate = query.endDate;
-			logs = logs.filter((log) => log.timestamp <= endDate);
-		}
+		if (query.action) logs = logs.filter((log) => log.action === query.action);
+		if (query.startDate)
+			logs = logs.filter((log) => log.timestamp >= query.startDate!);
+		if (query.endDate)
+			logs = logs.filter((log) => log.timestamp <= query.endDate!);
 
 		return Promise.resolve(logs.length);
 	}
@@ -150,36 +166,26 @@ export class MemoryStore implements Storage {
 	deleteLogs(query: AuditLogQuery): Promise<number> {
 		let logsToDelete = Array.from(this.logs.values());
 
-		// Apply same filters as findLogs
-		if (query.keyId) {
+		if (query.keyId)
 			logsToDelete = logsToDelete.filter((log) => log.keyId === query.keyId);
-		}
-
-		if (query.ownerId) {
+		if (query.ownerId)
 			logsToDelete = logsToDelete.filter(
 				(log) => log.ownerId === query.ownerId
 			);
-		}
-
-		if (query.action) {
+		if (query.action)
 			logsToDelete = logsToDelete.filter((log) => log.action === query.action);
-		}
+		if (query.startDate)
+			logsToDelete = logsToDelete.filter(
+				(log) => log.timestamp >= query.startDate!
+			);
+		if (query.endDate)
+			logsToDelete = logsToDelete.filter(
+				(log) => log.timestamp <= query.endDate!
+			);
 
-		if (query.startDate) {
-			const startDate = query.startDate;
-			logsToDelete = logsToDelete.filter((log) => log.timestamp >= startDate);
-		}
-
-		if (query.endDate) {
-			const endDate = query.endDate;
-			logsToDelete = logsToDelete.filter((log) => log.timestamp <= endDate);
-		}
-
-		// Delete the logs
 		for (const log of logsToDelete) {
 			this.logs.delete(log.id);
 		}
-
 		return Promise.resolve(logsToDelete.length);
 	}
 
@@ -192,19 +198,12 @@ export class MemoryStore implements Storage {
 		let lastActivity: string | null = null;
 
 		for (const log of logs) {
-			// Count by action
 			byAction[log.action] = (byAction[log.action] || 0) + 1;
-
-			// Track last activity
 			if (!lastActivity || log.timestamp > lastActivity) {
 				lastActivity = log.timestamp;
 			}
 		}
 
-		return Promise.resolve({
-			total: logs.length,
-			byAction,
-			lastActivity,
-		});
+		return Promise.resolve({ total: logs.length, byAction, lastActivity });
 	}
 }

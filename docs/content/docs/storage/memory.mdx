@@ -27,11 +27,26 @@ const keys = createKeys({
 
 ## How It Works
 
-Keys are stored in an in-memory `Map` structure:
-- Key lookups are O(1) hash table operations
-- No external dependencies
-- No network calls
-- Data exists only in the current process
+Keys are stored in an in-memory `Map` structure with optimized indexing:
+
+- **O(1) Hash Lookups**: A dedicated hash index maps key hashes to IDs for instant verification
+- **O(1) Owner Lookups**: An owner index maps owner IDs to their key sets for fast listing
+- **Hash Collision Detection**: Automatically detects and rejects duplicate key hashes
+- **No external dependencies**: Everything runs in-process
+- **No network calls**: Zero latency for storage operations
+
+### Internal Structure
+
+```typescript
+// Primary storage: id -> ApiKeyRecord
+keys: Map<string, ApiKeyRecord>
+
+// Hash index for O(1) verification: keyHash -> id
+hashIndex: Map<string, string>
+
+// Owner index for O(1) listing: ownerId -> Set<id>
+ownerIndex: Map<string, Set<string>>
+```
 
 ## Important Notes
 

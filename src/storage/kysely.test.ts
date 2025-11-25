@@ -46,8 +46,10 @@ describe("KyselyStore", () => {
 			dialect: new PostgresDialect({ pool }),
 		});
 
+		await sql`DROP TABLE IF EXISTS apikey`.execute(db);
+
 		await sql`
-			CREATE TABLE IF NOT EXISTS apikey (
+			CREATE TABLE apikey (
 				id TEXT PRIMARY KEY NOT NULL,
 				"keyHash" TEXT NOT NULL,
 				metadata JSONB NOT NULL
@@ -55,11 +57,11 @@ describe("KyselyStore", () => {
 		`.execute(db);
 
 		await sql`
-			CREATE INDEX IF NOT EXISTS apikey_key_hash_idx ON apikey("keyHash")
+			CREATE INDEX apikey_key_hash_idx ON apikey("keyHash")
 		`.execute(db);
 
 		await sql`
-			CREATE UNIQUE INDEX IF NOT EXISTS apikey_key_hash_unique ON apikey("keyHash")
+			CREATE UNIQUE INDEX apikey_key_hash_unique ON apikey("keyHash")
 		`.execute(db);
 
 		store = new KyselyStore({ db, table: "apikey" });

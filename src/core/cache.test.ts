@@ -1,11 +1,15 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryCache, RedisCache } from "./cache";
 
 describe("MemoryCache", () => {
 	let cache: MemoryCache;
 
 	beforeEach(() => {
-		cache = new MemoryCache();
+		cache = new MemoryCache({ cleanupInterval: 60_000 });
+	});
+
+	afterEach(() => {
+		cache.dispose();
 	});
 
 	it("should store and retrieve values", () => {
@@ -57,6 +61,83 @@ describe("MemoryCache", () => {
 		cache.del("key1");
 		expect(cache.get("key1")).toBeNull();
 		expect(cache.get("key2")).toBe("value2");
+	});
+
+	it("should respect max size limit", () => {
+		const smallCache = new MemoryCache({ maxSize: 3, cleanupInterval: 60_000 });
+
+		smallCache.set("key1", "value1", 60);
+		smallCache.set("key2", "value2", 60);
+		smallCache.set("key3", "value3", 60);
+		expect(smallCache.size).toBe(3);
+
+		smallCache.set("key4", "value4", 60);
+		expect(smallCache.size).toBe(3);
+		expect(smallCache.get("key4")).toBe("value4");
+
+		smallCache.dispose();
+	});
+
+	it("should evict expired entries before evicting by LRU", async () => {
+		const smallCache = new MemoryCache({ maxSize: 2, cleanupInterval: 60_000 });
+
+		// biome-ignore lint/style/noMagicNumbers: Short TTL for test
+		smallCache.set("expiring", "will expire", 0.05);
+		smallCache.set("permanent", "stays", 60);
+
+		// biome-ignore lint/style/noMagicNumbers: Wait for expiry
+		await new Promise((resolve) => setTimeout(resolve, 100));
+
+		smallCache.set("new", "entry", 60);
+
+		expect(smallCache.get("expiring")).toBeNull();
+		expect(smallCache.get("permanent")).toBe("stays");
+		expect(smallCache.get("new")).toBe("entry");
+
+		smallCache.dispose();
+	});
+
+	it("should cleanup expired entries", async () => {
+		// biome-ignore lint/style/noMagicNumbers: Short TTL for test
+		cache.set("expiring1", "value1", 0.05);
+		// biome-ignore lint/style/noMagicNumbers: Short TTL for test
+		cache.set("expiring2", "value2", 0.05);
+		cache.set("permanent", "value3", 60);
+
+		expect(cache.size).toBe(3);
+
+		// biome-ignore lint/style/noMagicNumbers: Wait for expiry
+		await new Promise((resolve) => setTimeout(resolve, 100));
+
+		cache.cleanup();
+
+		expect(cache.size).toBe(1);
+		expect(cache.get("permanent")).toBe("value3");
+	});
+
+	it("should report size correctly", () => {
+		expect(cache.size).toBe(0);
+		cache.set("key1", "value1", 60);
+		expect(cache.size).toBe(1);
+		cache.set("key2", "value2", 60);
+		expect(cache.size).toBe(2);
+		cache.del("key1");
+		expect(cache.size).toBe(1);
+	});
+
+	it("should allow updating existing key without eviction", () => {
+		const smallCache = new MemoryCache({ maxSize: 2, cleanupInterval: 60_000 });
+
+		smallCache.set("key1", "value1", 60);
+		smallCache.set("key2", "value2", 60);
+		expect(smallCache.size).toBe(2);
+
+		smallCache.set("key1", "updated", 60);
+		expect(smallCache.size).toBe(2);
+		expect(smallCache.get("key1")).toBe("updated");
+		expect(smallCache.get("key2")).toBe("value2");
+
+		smallCache.dispose();
 	});
 });
 

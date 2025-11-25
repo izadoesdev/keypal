@@ -25,11 +25,11 @@ Create the table in your database:
 ```sql
 CREATE TABLE api_keys (
   id TEXT PRIMARY KEY,
-  key_hash TEXT UNIQUE NOT NULL,
+  "keyHash" TEXT UNIQUE NOT NULL,
   metadata JSONB NOT NULL
 );
 
-CREATE INDEX api_keys_key_hash_idx ON api_keys(key_hash);
+CREATE INDEX api_keys_key_hash_idx ON api_keys("keyHash");
 ```
 
 For MySQL, use `JSON` instead of `JSONB`:
@@ -37,12 +37,14 @@ For MySQL, use `JSON` instead of `JSONB`:
 ```sql
 CREATE TABLE api_keys (
   id TEXT PRIMARY KEY,
-  key_hash TEXT UNIQUE NOT NULL,
+  keyHash TEXT UNIQUE NOT NULL,
   metadata JSON NOT NULL
 );
 
-CREATE INDEX api_keys_key_hash_idx ON api_keys(key_hash);
+CREATE INDEX api_keys_key_hash_idx ON api_keys(keyHash);
 ```
+
+> **Note**: The column name uses camelCase (`keyHash`) to match the default adapter configuration. If you prefer snake_case (`key_hash`), you can customize it using the `apiKeyColumns` option.
 
 ## Setup
 
@@ -94,7 +96,7 @@ Define your database types for full type safety:
 interface Database {
   api_keys: {
     id: string
-    key_hash: string
+    keyHash: string
     metadata: unknown // or a more specific type
   }
 }

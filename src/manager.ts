@@ -59,6 +59,17 @@ interface CacheRecord {
 	enabled: boolean;
 }
 
+function isValidCacheRecord(data: unknown): data is CacheRecord {
+	if (typeof data !== "object" || data === null) return false;
+	const record = data as Record<string, unknown>;
+	return (
+		typeof record.id === "string" &&
+		(record.expiresAt === null || typeof record.expiresAt === "string") &&
+		(record.revokedAt === null || typeof record.revokedAt === "string") &&
+		typeof record.enabled === "boolean"
+	);
+}
+
 /**
  * Options for verifying API keys
  */
@@ -301,51 +312,62 @@ export class ApiKeyManager {
 			const cached = await this.cache.get(`apikey:${keyHash}`);
 			if (cached) {
 				try {
-					const cacheData = JSON.parse(cached) as CacheRecord;
+					const parsed: unknown = JSON.parse(cached);
 
-					if (cacheData.expiresAt && isExpired(cacheData.expiresAt)) {
+					// Validate cache data shape to prevent issues from corrupted data
+					if (!isValidCacheRecord(parsed)) {
+						logger.error(
+							"CRITICAL: Invalid cache record shape, invalidating entry"
+						);
 						await this.cache.del(`apikey:${keyHash}`);
-						return createErrorResult(ApiKeyErrorCode.EXPIRED);
-					}
+						// Fall through to storage lookup
+					} else {
+						const cacheData = parsed;
 
-					if (cacheData.revokedAt) {
-						await this.cache.del(`apikey:${keyHash}`);
-						return createErrorResult(ApiKeyErrorCode.REVOKED);
-					}
+						if (cacheData.expiresAt && isExpired(cacheData.expiresAt)) {
+							await this.cache.del(`apikey:${keyHash}`);
+							return createErrorResult(ApiKeyErrorCode.EXPIRED);
+						}
 
-					if (cacheData.enabled === false) {
-						return createErrorResult(ApiKeyErrorCode.DISABLED);
-					}
+						if (cacheData.revokedAt) {
+							await this.cache.del(`apikey:${keyHash}`);
+							return createErrorResult(ApiKeyErrorCode.REVOKED);
+						}
 
-					const record = await this.storage.findById(cacheData.id);
-					if (!record) {
-						await this.cache.del(`apikey:${keyHash}`);
-						return createErrorResult(ApiKeyErrorCode.INVALID_KEY);
-					}
+						if (cacheData.enabled === false) {
+							return createErrorResult(ApiKeyErrorCode.DISABLED);
+						}
 
-					if (isExpired(record.metadata.expiresAt)) {
-						await this.cache.del(`apikey:${keyHash}`);
-						return createErrorResult(ApiKeyErrorCode.EXPIRED);
-					}
+						const record = await this.storage.findById(cacheData.id);
+						if (!record) {
+							await this.cache.del(`apikey:${keyHash}`);
+							return createErrorResult(ApiKeyErrorCode.INVALID_KEY);
+						}
 
-					if (record.metadata.revokedAt) {
-						await this.cache.del(`apikey:${keyHash}`);
-						return createErrorResult(ApiKeyErrorCode.REVOKED);
-					}
+						if (isExpired(record.metadata.expiresAt)) {
+							await this.cache.del(`apikey:${keyHash}`);
+							return createErrorResult(ApiKeyErrorCode.EXPIRED);
+						}
 
-					if (this.autoTrackUsage && !options.skipTracking) {
-						this.updateLastUsed(record.id).catch((err) => {
-							logger.error("Failed to track usage:", err);
-						});
-					}
+						if (record.metadata.revokedAt) {
+							await this.cache.del(`apikey:${keyHash}`);
+							return createErrorResult(ApiKeyErrorCode.REVOKED);
+						}
 
-					return { valid: true, record };
+						if (this.autoTrackUsage && !options.skipTracking) {
+							this.updateLastUsed(record.id).catch((err) => {
+								logger.error("Failed to track usage:", err);
+							});
+						}
+
+						return { valid: true, record };
+					}
 				} catch (error) {
 					logger.error(
 						"CRITICAL: Cache corruption detected, invalidating entry:",
 						error
 					);
-					this.cache.del(`apikey:${keyHash}`);
+					await this.cache.del(`apikey:${keyHash}`);
 				}
 			}
 		}

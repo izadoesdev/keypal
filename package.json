@@ -1,6 +1,6 @@
 {
   "name": "keypal",
-  "version": "0.0.212",
+  "version": "0.0.213",
   "description": "A TypeScript library for secure API key management with cryptographic hashing, expiration, scopes, and pluggable storage",
   "type": "module",
   "main": "./dist/index.mjs",

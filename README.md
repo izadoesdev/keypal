@@ -584,7 +584,7 @@ const keys = createKeys({
 })
 ```
 
-**Setup Database Schema:**
+**Setup Database Schema (PostgreSQL):**
 
 ```sql
 CREATE TABLE api_keys (
@@ -595,6 +595,8 @@ CREATE TABLE api_keys (
 
 CREATE INDEX api_keys_key_hash_idx ON api_keys("keyHash");
 ```
+
+> **Note**: The column uses camelCase (`keyHash`) by default. For MySQL, omit the quotes around `keyHash`.
 
 ### Custom Storage
 

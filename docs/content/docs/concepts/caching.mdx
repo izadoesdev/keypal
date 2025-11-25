@@ -19,6 +19,13 @@ const keys = createKeys({
 })
 ```
 
+The in-memory cache includes automatic memory management:
+
+- **Max Size**: Default limit of 10,000 entries to prevent memory leaks
+- **LRU Eviction**: When the cache is full, the oldest entry is evicted
+- **Automatic Cleanup**: Expired entries are removed every 60 seconds
+- **Graceful Shutdown**: Call `dispose()` to clean up timers when shutting down
+
 ### Redis Cache
 
 ```typescript
@@ -39,6 +46,7 @@ const keys = createKeys({
 2. **Cache Lookup**: Subsequent verifications check cache first
 3. **Cache Miss**: If not in cache, query storage and cache result
 4. **TTL**: Cached entries expire after the configured TTL
+5. **Validation**: Cached data is validated on retrieval to prevent corruption issues
 
 ## Cache Invalidation
 
@@ -50,6 +58,7 @@ await keys.invalidateCache(keyHash)
 // - Key is revoked
 // - Key is disabled/enabled
 // - Key is rotated
+// - Corrupted cache data is detected
 ```
 
 ## Skip Cache
@@ -61,10 +70,27 @@ const result = await keys.verify(key, {
 })
 ```
 
+## Advanced: Custom Memory Cache Options
+
+If you need to customize the in-memory cache behavior, you can create a `MemoryCache` instance directly:
+
+```typescript
+import { MemoryCache } from 'keypal'
+
+const cache = new MemoryCache({
+  maxSize: 50000,        // Maximum entries (default: 10,000)
+  cleanupInterval: 30000 // Cleanup interval in ms (default: 60,000)
+})
+
+// Use with createKeys via the cache option
+// Or use directly for custom caching needs
+```
+
 ## Best Practices
 
 1. **Enable caching in production** to reduce database load
 2. **Use Redis cache** for distributed applications
 3. **Set appropriate TTL** based on your needs (60-300 seconds is common)
 4. **Monitor cache hit rates** to optimize performance
+5. **Call `dispose()`** on MemoryCache when shutting down to prevent timer leaks
 

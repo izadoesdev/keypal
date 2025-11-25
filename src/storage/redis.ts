@@ -1,6 +1,47 @@
 import type Redis from "ioredis";
+import type { ChainableCommander } from "ioredis";
 import type { ApiKeyMetadata, ApiKeyRecord } from "../types/api-key-types";
 import type { Storage } from "../types/storage-types";
+
+function isValidApiKeyRecord(data: unknown): data is ApiKeyRecord {
+	if (typeof data !== "object" || data === null) return false;
+	const record = data as Record<string, unknown>;
+	return (
+		typeof record.id === "string" &&
+		typeof record.keyHash === "string" &&
+		typeof record.metadata === "object" &&
+		record.metadata !== null
+	);
+}
+
+async function execPipeline(
+	pipeline: ChainableCommander,
+	operation: string
+): Promise<Array<[Error | null, unknown]>> {
+	const results = await pipeline.exec();
+	if (!results) {
+		throw new Error(`Redis pipeline returned null for ${operation}`);
+	}
+
+	for (let i = 0; i < results.length; i++) {
+		const result = results[i];
+		if (result?.[0]) {
+			throw new Error(
+				`Redis pipeline command ${i} failed in ${operation}: ${result[0].message}`
+			);
+		}
+	}
+	return results;
+}
+
+function parseRecord(data: string): ApiKeyRecord | null {
+	try {
+		const parsed: unknown = JSON.parse(data);
+		return isValidApiKeyRecord(parsed) ? parsed : null;
+	} catch {
+		return null;
+	}
+}
 
 export class RedisStore implements Storage {
 	private readonly redis: Redis;
@@ -28,8 +69,7 @@ export class RedisStore implements Storage {
 	}
 
 	async save(record: ApiKeyRecord): Promise<void> {
-		const existing = await this.findById(record.id);
-		if (existing) {
+		if (await this.findById(record.id)) {
 			throw new Error(`API key with id ${record.id} already exists`);
 		}
 
@@ -38,90 +78,79 @@ export class RedisStore implements Storage {
 		pipeline.set(this.hashKey(record.keyHash), record.id);
 		pipeline.sadd(this.ownerKey(record.metadata.ownerId), record.id);
 
-		if (record.metadata.tags && record.metadata.tags.length > 0) {
+		if (record.metadata.tags?.length) {
 			for (const tag of record.metadata.tags) {
 				pipeline.sadd(this.tagKey(tag.toLowerCase()), record.id);
 			}
 		}
 
-		await pipeline.exec();
+		await execPipeline(pipeline, "save");
 	}
 
 	async findByHash(keyHash: string): Promise<ApiKeyRecord | null> {
 		const id = await this.redis.get(this.hashKey(keyHash));
-		if (!id) {
-			return null;
-		}
-		return this.findById(id);
+		return id ? this.findById(id) : null;
 	}
 
 	async findById(id: string): Promise<ApiKeyRecord | null> {
 		const data = await this.redis.get(this.key(id));
-		if (!data) {
-			return null;
-		}
-		return JSON.parse(data);
+		return data ? parseRecord(data) : null;
 	}
 
 	async findByOwner(ownerId: string): Promise<ApiKeyRecord[]> {
 		const ids = await this.redis.smembers(this.ownerKey(ownerId));
-		if (ids.length === 0) {
-			return [];
-		}
+		if (!ids.length) return [];
 
 		const pipeline = this.redis.pipeline();
 		for (const id of ids) {
 			pipeline.get(this.key(id));
 		}
-		const results = await pipeline.exec();
+		const results = await execPipeline(pipeline, "findByOwner");
 
-		return (
-			results
-				?.map((result) =>
-					result?.[1] ? JSON.parse(result[1] as string) : null
-				)
-				.filter((record): record is ApiKeyRecord => record !== null) ?? []
-		);
+		const records: ApiKeyRecord[] = [];
+		for (const result of results) {
+			if (result[1]) {
+				const record = parseRecord(result[1] as string);
+				if (record) records.push(record);
+			}
+		}
+		return records;
 	}
 
 	async findByTags(tags: string[], ownerId?: string): Promise<ApiKeyRecord[]> {
 		const tagKeys = tags.map((t) => this.tagKey(t.toLowerCase()));
-
-		if (tagKeys.length === 0) {
-			return [];
-		}
+		if (!tagKeys.length) return [];
 
 		let tagIds =
 			tagKeys.length === 1 && tagKeys[0]
 				? await this.redis.smembers(tagKeys[0])
 				: await this.redis.sunion(...tagKeys);
 
-		if (ownerId !== undefined && tagIds.length > 0) {
+		if (ownerId !== undefined && tagIds.length) {
 			const ownerIds = await this.redis.smembers(this.ownerKey(ownerId));
 			tagIds = tagIds.filter((id) => ownerIds.includes(id));
 		}
 
-		if (tagIds.length === 0) {
-			return [];
-		}
+		if (!tagIds.length) return [];
 
 		const pipeline = this.redis.pipeline();
 		for (const id of tagIds) {
 			pipeline.get(this.key(id));
 		}
+		const results = await execPipeline(pipeline, "findByTags");
 
-		const results = await pipeline.exec();
-		return (
-			results
-				?.map((result) =>
-					result?.[1] ? JSON.parse(result[1] as string) : null
-				)
-				.filter((record): record is ApiKeyRecord => record !== null) ?? []
-		);
+		const records: ApiKeyRecord[] = [];
+		for (const result of results) {
+			if (result[1]) {
+				const record = parseRecord(result[1] as string);
+				if (record) records.push(record);
+			}
+		}
+		return records;
 	}
 
 	async findByTag(tag: string, ownerId?: string): Promise<ApiKeyRecord[]> {
-		return await this.findByTags([tag], ownerId);
+		return this.findByTags([tag], ownerId);
 	}
 
 	async updateMetadata(
@@ -129,9 +158,7 @@ export class RedisStore implements Storage {
 		metadata: Partial<ApiKeyMetadata>
 	): Promise<void> {
 		const record = await this.findById(id);
-		if (!record) {
-			throw new Error(`API key with id ${id} not found`);
-		}
+		if (!record) throw new Error(`API key with id ${id} not found`);
 
 		const oldTags = record.metadata.tags ?? [];
 		record.metadata = { ...record.metadata, ...metadata };
@@ -149,73 +176,75 @@ export class RedisStore implements Storage {
 			const newTagsSet = new Set(newTags.map((t) => t.toLowerCase()));
 
 			for (const tag of oldTagsSet) {
-				if (!newTagsSet.has(tag)) {
-					pipeline.srem(this.tagKey(tag), id);
-				}
+				if (!newTagsSet.has(tag)) pipeline.srem(this.tagKey(tag), id);
 			}
-
 			for (const tag of newTagsSet) {
-				if (!oldTagsSet.has(tag)) {
-					pipeline.sadd(this.tagKey(tag), id);
-				}
+				if (!oldTagsSet.has(tag)) pipeline.sadd(this.tagKey(tag), id);
 			}
 		}
 
-		await pipeline.exec();
+		await execPipeline(pipeline, "updateMetadata");
 	}
 
 	async delete(id: string): Promise<void> {
 		const record = await this.findById(id);
-		if (!record) {
-			return;
-		}
+		if (!record) return;
 
 		const pipeline = this.redis.pipeline();
 		pipeline.del(this.key(id));
 		pipeline.del(this.hashKey(record.keyHash));
 		pipeline.srem(this.ownerKey(record.metadata.ownerId), id);
 
-		if (record.metadata.tags && record.metadata.tags.length > 0) {
+		if (record.metadata.tags?.length) {
 			for (const tag of record.metadata.tags) {
 				pipeline.srem(this.tagKey(tag.toLowerCase()), id);
 			}
 		}
 
-		await pipeline.exec();
+		await execPipeline(pipeline, "delete");
 	}
 
 	async deleteByOwner(ownerId: string): Promise<void> {
 		const ids = await this.redis.smembers(this.ownerKey(ownerId));
-		if (ids.length === 0) {
-			return;
-		}
+		if (!ids.length) return;
 
 		const pipeline = this.redis.pipeline();
 		for (const id of ids) {
-			const record = await this.findById(id);
-			if (record) {
-				pipeline.del(this.key(id));
-				pipeline.del(this.hashKey(record.keyHash));
-				if (record.metadata.tags && record.metadata.tags.length > 0) {
-					for (const tag of record.metadata.tags) {
-						pipeline.srem(this.tagKey(tag.toLowerCase()), id);
+			pipeline.get(this.key(id));
+		}
+		const recordResults = await execPipeline(pipeline, "deleteByOwner:fetch");
+
+		const deletePipeline = this.redis.pipeline();
+		for (let i = 0; i < ids.length; i++) {
+			const id = ids[i];
+			if (!id) continue;
+
+			deletePipeline.del(this.key(id));
+
+			const result = recordResults[i];
+			if (result?.[1]) {
+				const record = parseRecord(result[1] as string);
+				if (record) {
+					deletePipeline.del(this.hashKey(record.keyHash));
+					if (record.metadata.tags?.length) {
+						for (const tag of record.metadata.tags) {
+							deletePipeline.srem(this.tagKey(tag.toLowerCase()), id);
+						}
 					}
 				}
 			}
 		}
-		pipeline.del(this.ownerKey(ownerId));
-		await pipeline.exec();
+		deletePipeline.del(this.ownerKey(ownerId));
+		await execPipeline(deletePipeline, "deleteByOwner:delete");
 	}
 
 	async setTtl(id: string, ttlSeconds: number): Promise<void> {
 		const record = await this.findById(id);
-		if (!record) {
-			return;
-		}
+		if (!record) return;
 
 		const pipeline = this.redis.pipeline();
 		pipeline.expire(this.key(id), ttlSeconds);
 		pipeline.expire(this.hashKey(record.keyHash), ttlSeconds);
-		await pipeline.exec();
+		await execPipeline(pipeline, "setTtl");
 	}
 }

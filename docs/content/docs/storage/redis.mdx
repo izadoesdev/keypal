@@ -97,6 +97,10 @@ const keys = createKeys({
 
 **High performance**: Redis operations are extremely fast, making it ideal for high-throughput applications.
 
+**Pipeline error checking**: All Redis pipeline operations validate individual command results, ensuring data integrity even when multiple operations run together.
+
+**JSON validation**: Data retrieved from Redis is validated before use, protecting against corruption and ensuring type safety.
+
 ## Production Setup
 
 For production, consider:

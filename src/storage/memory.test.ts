@@ -353,4 +353,62 @@ describe("MemoryStore", () => {
 			expect(found?.metadata.ownerId).toBe("user_minimal");
 		});
 	});
+
+	describe("Index Integrity", () => {
+		it("should maintain hash index after multiple operations", async () => {
+			const { record: r1 } = await keys.create({ ownerId: "user_1" });
+			const { record: r2 } = await keys.create({ ownerId: "user_2" });
+
+			expect(await store.findByHash(r1.keyHash)).not.toBeNull();
+			expect(await store.findByHash(r2.keyHash)).not.toBeNull();
+
+			await store.delete(r1.id);
+
+			expect(await store.findByHash(r1.keyHash)).toBeNull();
+			expect(await store.findByHash(r2.keyHash)).not.toBeNull();
+		});
+
+		it("should maintain owner index after updates", async () => {
+			const { record } = await keys.create({ ownerId: "owner_a" });
+
+			expect(await store.findByOwner("owner_a")).toHaveLength(1);
+			expect(await store.findByOwner("owner_b")).toHaveLength(0);
+
+			await store.updateMetadata(record.id, { ownerId: "owner_b" });
+
+			expect(await store.findByOwner("owner_a")).toHaveLength(0);
+			expect(await store.findByOwner("owner_b")).toHaveLength(1);
+		});
+
+		it("should detect hash collision on save", async () => {
+			const { record } = await keys.create({ ownerId: "user_1" });
+
+			const duplicateHashRecord: ApiKeyRecord = {
+				id: "different_id",
+				keyHash: record.keyHash,
+				metadata: { ownerId: "user_2" },
+			};
+
+			await expect(store.save(duplicateHashRecord)).rejects.toThrow(
+				"API key hash collision detected"
+			);
+		});
+
+		it("should clean up all indexes on deleteByOwner", async () => {
+			const { record: r1 } = await keys.create({
+				ownerId: "bulk_delete_owner",
+				tags: ["tag1"],
+			});
+			const { record: r2 } = await keys.create({
+				ownerId: "bulk_delete_owner",
+				tags: ["tag2"],
+			});
+
+			await store.deleteByOwner("bulk_delete_owner");
+
+			expect(await store.findByHash(r1.keyHash)).toBeNull();
+			expect(await store.findByHash(r2.keyHash)).toBeNull();
+			expect(await store.findByOwner("bulk_delete_owner")).toHaveLength(0);
+		});
+	});
 });

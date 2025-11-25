@@ -1,6 +1,7 @@
 /** biome-ignore-all lint/suspicious/noConsole: benchmarking */
 /** biome-ignore-all lint/style/noMagicNumbers: benchmarking */
 import chalk from "chalk";
+import { nanoid } from "nanoid";
 import { MemoryCache } from "./src/core/cache";
 import { getExpirationTime, isExpired } from "./src/core/expiration";
 import { extractKeyFromHeaders, hasApiKey } from "./src/core/extract-key";
@@ -16,6 +17,9 @@ import {
 	hasScopeWithResources,
 } from "./src/core/scopes";
 import { validateKey } from "./src/core/validate";
+import { MemoryStore } from "./src/storage/memory";
+import type { ApiKeyRecord } from "./src/types/api-key-types";
+import type { AuditLog } from "./src/types/audit-log-types";
 import type { PermissionScope } from "./src/types/permissions-types";
 
 type BenchResult = {
@@ -75,6 +79,30 @@ function bench(
 	return { name, opsPerSec, avgNs };
 }
 
+async function benchAsync(
+	name: string,
+	fn: () => Promise<unknown>,
+	iterations = 10_000
+): Promise<BenchResult> {
+	// Warmup
+	for (let i = 0; i < 100; i++) {
+		await fn();
+	}
+
+	const times: number[] = [];
+	for (let i = 0; i < iterations; i++) {
+		const start = performance.now();
+		await fn();
+		const end = performance.now();
+		times.push((end - start) * 1_000_000); // to ns
+	}
+
+	const avgNs = times.reduce((a, b) => a + b, 0) / iterations;
+	const opsPerSec = 1_000_000_000 / avgNs;
+
+	return { name, opsPerSec, avgNs };
+}
+
 function printGroup(group: BenchGroup) {
 	console.log(`\n${group.icon}  ${chalk.bold.white(group.title)}`);
 	console.log(chalk.dim("─".repeat(80)));
@@ -86,10 +114,12 @@ function printGroup(group: BenchGroup) {
 	}
 }
 
-function main() {
+async function main() {
 	console.log(chalk.bold.magenta("\n⚡ Core Performance Benchmarks\n"));
 
-	// Setup
+	// ============================================================
+	// Setup test data
+	// ============================================================
 	const key = "sk_test_abcdef1234567890ABCDEF1234567890";
 	const keyHash = hashKey(key);
 	const scopes: PermissionScope[] = ["read", "write", "delete"];
@@ -107,6 +137,51 @@ function main() {
 	const pastDate = new Date(Date.now() - 86_400_000).toISOString();
 	const cache = new MemoryCache();
 	cache.set("cached-key", "value", 60);
+
+	// Setup storage with test data for tag/delete benchmarks
+	const storage = new MemoryStore();
+	const testRecords: ApiKeyRecord[] = [];
+
+	console.log(chalk.dim("Setting up test data..."));
+
+	for (let i = 0; i < 100; i++) {
+		const record: ApiKeyRecord = {
+			id: nanoid(),
+			keyHash: hashKey(`sk_test_${i}_${nanoid()}`),
+			metadata: {
+				ownerId: `user_${i % 10}`,
+				name: `Test Key ${i}`,
+				scopes: ["read", "write"],
+				tags: [`env:${i % 2 === 0 ? "prod" : "dev"}`, `team:${i % 5}`],
+				createdAt: new Date().toISOString(),
+				expiresAt: null,
+				revokedAt: null,
+				enabled: true,
+				rotatedTo: null,
+			},
+		};
+		await storage.save(record);
+		testRecords.push(record);
+	}
+
+	// Create audit logs for benchmarking
+	const auditLogs: AuditLog[] = [];
+	for (let i = 0; i < 500; i++) {
+		const log: AuditLog = {
+			id: nanoid(),
+			action: ["created", "revoked", "rotated", "enabled", "disabled"][
+				i % 5
+			] as AuditLog["action"],
+			keyId: testRecords[i % 100]?.id ?? nanoid(),
+			ownerId: `user_${i % 10}`,
+			timestamp: new Date(Date.now() - i * 60000).toISOString(),
+			data: { ip: "127.0.0.1", userAgent: "benchmark" },
+		};
+		await storage.saveLog(log);
+		auditLogs.push(log);
+	}
+
+	console.log(chalk.dim("Setup complete.\n"));
 
 	const groups: BenchGroup[] = [
 		{
@@ -271,12 +346,115 @@ function main() {
 		},
 	];
 
+	// Async benchmarks need separate handling
+	const asyncGroups: BenchGroup[] = [];
+
+	// Storage: Tag-based Lookups
+	const tagResults: BenchResult[] = [];
+	tagResults.push(await benchAsync("findByTag (single)", () => storage.findByTag("env:prod")));
+	tagResults.push(await benchAsync("findByTag (with owner)", () => storage.findByTag("env:prod", "user_0")));
+	tagResults.push(await benchAsync("findByTags (multiple)", () => storage.findByTags(["env:prod", "team:1"])));
+	tagResults.push(await benchAsync("findByTags (with owner)", () => storage.findByTags(["env:prod", "team:1"], "user_0")));
+	asyncGroups.push({ title: "Tag-based Lookups", icon: "🏷️", results: tagResults });
+
+	// Storage: Core Operations
+	const storageResults: BenchResult[] = [];
+	storageResults.push(await benchAsync("findById", () => storage.findById(testRecords[0]?.id ?? nanoid())));
+	storageResults.push(await benchAsync("findByHash", () => storage.findByHash(testRecords[0]?.keyHash ?? nanoid())));
+	storageResults.push(await benchAsync("findByOwner", () => storage.findByOwner("user_0")));
+	storageResults.push(await benchAsync("updateMetadata", () => storage.updateMetadata(testRecords[0]?.id ?? nanoid(), { lastUsedAt: new Date().toISOString() })));
+	asyncGroups.push({ title: "Storage Core Operations", icon: "📦", results: storageResults });
+
+	// Storage: Delete Operations
+	const deleteResults: BenchResult[] = [];
+	let deleteCounter = 0;
+	deleteResults.push(await benchAsync("delete (single)", async () => {
+		const record: ApiKeyRecord = {
+			id: `delete_${deleteCounter++}`,
+			keyHash: hashKey(`delete_key_${deleteCounter}`),
+			metadata: {
+				ownerId: "delete_user",
+				name: "Delete Test",
+				createdAt: new Date().toISOString(),
+				expiresAt: null,
+				revokedAt: null,
+				enabled: true,
+				rotatedTo: null,
+			},
+		};
+		await storage.save(record);
+		await storage.delete(record.id);
+	}, 10_000));
+	asyncGroups.push({ title: "Storage Delete Operations", icon: "🗑️", results: deleteResults });
+
+	// Audit Log Operations
+	const auditResults: BenchResult[] = [];
+	auditResults.push(await benchAsync("saveLog", async () => {
+		const log: AuditLog = {
+			id: nanoid(),
+			action: "created",
+			keyId: testRecords[0]?.id ?? nanoid(),
+			ownerId: "user_0",
+			timestamp: new Date().toISOString(),
+		};
+		await storage.saveLog(log);
+	}, 10_000));
+	auditResults.push(await benchAsync("findLogs (no filter)", () => storage.findLogs({})));
+	auditResults.push(await benchAsync("findLogs (by keyId)", () => storage.findLogs({ keyId: testRecords[0]?.id ?? nanoid() })));
+	auditResults.push(await benchAsync("findLogs (by ownerId)", () => storage.findLogs({ ownerId: "user_0" })));
+	auditResults.push(await benchAsync("findLogs (by action)", () => storage.findLogs({ action: "created" })));
+	auditResults.push(await benchAsync("findLogs (date range)", () => storage.findLogs({
+		startDate: new Date(Date.now() - 3600000).toISOString(),
+		endDate: new Date().toISOString(),
+	})));
+	auditResults.push(await benchAsync("countLogs", () => storage.countLogs({ ownerId: "user_0" })));
+	auditResults.push(await benchAsync("getLogStats", () => storage.getLogStats("user_0")));
+	asyncGroups.push({ title: "Audit Log Operations", icon: "📋", results: auditResults });
+
+	// Concurrency Tests
+	const concurrencyResults: BenchResult[] = [];
+	concurrencyResults.push(await benchAsync("10 concurrent findById", async () => {
+		const ids = testRecords.slice(0, 10).map(r => r.id);
+		await Promise.all(ids.map(id => storage.findById(id)));
+	}, 5_000));
+	concurrencyResults.push(await benchAsync("50 concurrent findById", async () => {
+		const ids = testRecords.slice(0, 50).map(r => r.id);
+		await Promise.all(ids.map(id => storage.findById(id)));
+	}, 1_000));
+	concurrencyResults.push(await benchAsync("100 concurrent findById", async () => {
+		await Promise.all(testRecords.map(r => storage.findById(r.id)));
+	}, 500));
+	concurrencyResults.push(await benchAsync("50 concurrent findByHash", async () => {
+		const hashes = testRecords.slice(0, 50).map(r => r.keyHash);
+		await Promise.all(hashes.map(h => storage.findByHash(h)));
+	}, 1_000));
+	concurrencyResults.push(await benchAsync("mixed operations (50 concurrent)", async () => {
+		const ops = Array.from({ length: 50 }, (_, i) => {
+			const record = testRecords[i % 100];
+			const op = i % 4;
+			if (op === 0) return storage.findById(record?.id ?? "");
+			if (op === 1) return storage.findByHash(record?.keyHash ?? "");
+			if (op === 2) return storage.findByOwner(`user_${i % 10}`);
+			return storage.findByTag("env:prod");
+		});
+		await Promise.all(ops);
+	}, 1_000));
+	asyncGroups.push({ title: "Concurrency Stress Tests", icon: "⚡", results: concurrencyResults });
+
+	// Print sync benchmarks
+	console.log(chalk.bold.cyan("\n━━━ Synchronous Operations ━━━"));
 	for (const group of groups) {
 		printGroup(group);
 	}
 
+	// Print async benchmarks
+	console.log(chalk.bold.cyan("\n━━━ Asynchronous Operations ━━━"));
+	for (const group of asyncGroups) {
+		printGroup(group);
+	}
+
 	// Summary
-	const allResults = groups.flatMap((g) => g.results);
+	const allResults = [...groups, ...asyncGroups].flatMap((g) => g.results);
 	const fastest = allResults.reduce((a, b) =>
 		a.opsPerSec > b.opsPerSec ? a : b
 	);
@@ -297,4 +475,4 @@ function main() {
 	);
 }
 
-main();
+main().catch(console.error);

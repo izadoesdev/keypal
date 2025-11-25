@@ -11,6 +11,7 @@ export class MemoryStore implements Storage {
 	private readonly keys = new Map<string, ApiKeyRecord>();
 	private readonly hashIndex = new Map<string, string>();
 	private readonly ownerIndex = new Map<string, Set<string>>();
+	private readonly tagIndex = new Map<string, Set<string>>();
 	private readonly logs = new Map<string, AuditLog>();
 
 	async save(record: ApiKeyRecord): Promise<void> {
@@ -24,11 +25,19 @@ export class MemoryStore implements Storage {
 		this.keys.set(record.id, record);
 		this.hashIndex.set(record.keyHash, record.id);
 
-		const { ownerId } = record.metadata;
+		const { ownerId, tags } = record.metadata;
 		if (ownerId) {
 			const ownerKeys = this.ownerIndex.get(ownerId) ?? new Set();
 			ownerKeys.add(record.id);
 			this.ownerIndex.set(ownerId, ownerKeys);
+		}
+
+		if (tags) {
+			for (const tag of tags) {
+				const tagKeys = this.tagIndex.get(tag) ?? new Set();
+				tagKeys.add(record.id);
+				this.tagIndex.set(tag, tagKeys);
+			}
 		}
 	}
 
@@ -55,18 +64,41 @@ export class MemoryStore implements Storage {
 
 	async findByTags(tags: string[], ownerId?: string): Promise<ApiKeyRecord[]> {
 		const lowercaseTags = tags.map((t) => t.toLowerCase());
-		const records =
-			ownerId !== undefined
-				? await this.findByOwner(ownerId)
-				: Array.from(this.keys.values());
 
-		return records.filter((record) =>
-			lowercaseTags.some((t) => record.metadata.tags?.includes(t))
-		);
+		// Use tag index for fast lookup
+		const matchingIds = new Set<string>();
+		for (const tag of lowercaseTags) {
+			const ids = this.tagIndex.get(tag);
+			if (ids) {
+				for (const id of ids) {
+					matchingIds.add(id);
+				}
+			}
+		}
+
+		const records: ApiKeyRecord[] = [];
+		for (const id of matchingIds) {
+			const record = this.keys.get(id);
+			if (record && (ownerId === undefined || record.metadata.ownerId === ownerId)) {
+				records.push(record);
+			}
+		}
+		return records;
 	}
 
 	async findByTag(tag: string, ownerId?: string): Promise<ApiKeyRecord[]> {
-		return this.findByTags([tag], ownerId);
+		const lowercaseTag = tag.toLowerCase();
+		const ids = this.tagIndex.get(lowercaseTag);
+		if (!ids?.size) return [];
+
+		const records: ApiKeyRecord[] = [];
+		for (const id of ids) {
+			const record = this.keys.get(id);
+			if (record && (ownerId === undefined || record.metadata.ownerId === ownerId)) {
+				records.push(record);
+			}
+		}
+		return records;
 	}
 
 	async updateMetadata(
@@ -79,9 +111,12 @@ export class MemoryStore implements Storage {
 		}
 
 		const oldOwnerId = record.metadata.ownerId;
+		const oldTags = record.metadata.tags;
 		record.metadata = { ...record.metadata, ...metadata };
 		const newOwnerId = record.metadata.ownerId;
+		const newTags = record.metadata.tags;
 
+		// Update owner index if changed
 		if (oldOwnerId !== newOwnerId) {
 			if (oldOwnerId) {
 				const oldOwnerKeys = this.ownerIndex.get(oldOwnerId);
@@ -94,17 +129,45 @@ export class MemoryStore implements Storage {
 				this.ownerIndex.set(newOwnerId, newOwnerKeys);
 			}
 		}
+
+		// Update tag index if tags changed
+		if (metadata.tags !== undefined) {
+			// Remove old tags from index
+			if (oldTags) {
+				for (const tag of oldTags) {
+					const tagKeys = this.tagIndex.get(tag);
+					tagKeys?.delete(id);
+					if (tagKeys?.size === 0) this.tagIndex.delete(tag);
+				}
+			}
+			// Add new tags to index
+			if (newTags) {
+				for (const tag of newTags) {
+					const tagKeys = this.tagIndex.get(tag) ?? new Set();
+					tagKeys.add(id);
+					this.tagIndex.set(tag, tagKeys);
+				}
+			}
+		}
 	}
 
 	async delete(id: string): Promise<void> {
 		const record = this.keys.get(id);
 		if (record) {
 			this.hashIndex.delete(record.keyHash);
-			const { ownerId } = record.metadata;
+			const { ownerId, tags } = record.metadata;
 			if (ownerId) {
 				const ownerKeys = this.ownerIndex.get(ownerId);
 				ownerKeys?.delete(id);
 				if (ownerKeys?.size === 0) this.ownerIndex.delete(ownerId);
+			}
+			// Clean up tag index
+			if (tags) {
+				for (const tag of tags) {
+					const tagKeys = this.tagIndex.get(tag);
+					tagKeys?.delete(id);
+					if (tagKeys?.size === 0) this.tagIndex.delete(tag);
+				}
 			}
 		}
 		this.keys.delete(id);
@@ -118,6 +181,14 @@ export class MemoryStore implements Storage {
 			const record = this.keys.get(id);
 			if (record) {
 				this.hashIndex.delete(record.keyHash);
+				// Clean up tag index
+				if (record.metadata.tags) {
+					for (const tag of record.metadata.tags) {
+						const tagKeys = this.tagIndex.get(tag);
+						tagKeys?.delete(id);
+						if (tagKeys?.size === 0) this.tagIndex.delete(tag);
+					}
+				}
 				this.keys.delete(id);
 			}
 		}

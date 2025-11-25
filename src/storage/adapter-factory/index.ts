@@ -236,7 +236,6 @@ export const createAdapterFactory = (
 		return transformed;
 	};
 
-	// Transform database row back to audit log
 	const transformAuditLogOutput = (row: Record<string, unknown>): AuditLog => {
 		const log: AuditLog = {
 			id: String(row[getColumnName("auditlog", "id")]),

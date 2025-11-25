@@ -443,7 +443,12 @@ export function createPrismaStore(options: PrismaAdapterConfig): Storage {
 }
 
 /**
- * @deprecated Use `createPrismaStore` instead. This class will be removed in the next major version.
+ * Storage adapter class for Prisma ORM
+ * 
+ * @example
+ * ```typescript
+ * const store = new PrismaStore({ prisma, model: 'apiKey' });
+ * ```
  */
 export class PrismaStore implements Storage {
 	private readonly storage: Storage;

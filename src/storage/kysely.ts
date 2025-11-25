@@ -488,7 +488,12 @@ export function createKyselyStore(options: KyselyAdapterConfig): Storage {
 }
 
 /**
- * @deprecated Use `createKyselyStore` instead. This class will be removed in the next major version.
+ * Storage adapter class for Kysely Query Builder
+ * 
+ * @example
+ * ```typescript
+ * const store = new KyselyStore({ db, table: 'apikey', provider: 'pg' });
+ * ```
  */
 export class KyselyStore implements Storage {
 	private readonly storage: Storage;

@@ -480,7 +480,12 @@ export function createDrizzleStore(options: DrizzleAdapterConfig): Storage {
 }
 
 /**
- * @deprecated Use `createDrizzleStore` instead. This class will be removed in the next major version.
+ * Storage adapter class for Drizzle ORM
+ * 
+ * @example
+ * ```typescript
+ * const store = new DrizzleStore({ db, table: apikey, provider: 'pg' });
+ * ```
  */
 export class DrizzleStore implements Storage {
 	private readonly storage: Storage;

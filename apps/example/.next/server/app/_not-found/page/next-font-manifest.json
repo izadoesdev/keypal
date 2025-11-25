@@ -1,0 +1,10 @@
+{
+  "pages": {},
+  "app": {
+    "[project]/apps/example/app/_not-found/page": [
+      "static/media/a343f882a40d2cc9-s.p.71e1367e.woff2"
+    ]
+  },
+  "appUsingSizeAdjust": true,
+  "pagesUsingSizeAdjust": false
+}

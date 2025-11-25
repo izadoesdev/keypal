@@ -589,11 +589,11 @@ const keys = createKeys({
 ```sql
 CREATE TABLE api_keys (
   id TEXT PRIMARY KEY,
-  key_hash TEXT UNIQUE NOT NULL,
+  "keyHash" TEXT UNIQUE NOT NULL,
   metadata JSONB NOT NULL
 );
 
-CREATE INDEX api_keys_key_hash_idx ON api_keys(key_hash);
+CREATE INDEX api_keys_key_hash_idx ON api_keys("keyHash");
 ```
 
 ### Custom Storage

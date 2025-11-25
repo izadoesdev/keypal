@@ -2,6 +2,7 @@ import type { ApiKeyRecord, ApiKeyMetadata } from "../../types/api-key-types";
 import type { AuditLog, AuditLogQuery, AuditLogStats, AuditAction } from "../../types/audit-log-types";
 import type { Storage } from "../../types/storage-types";
 import { generateKey } from "../../core/generate";
+import { logger } from "../../utils/logger";
 import type {
 	AdapterFactoryConfig,
 	AdapterFactoryOptions,
@@ -12,23 +13,19 @@ import type {
 } from "./types";
 
 export * from "./types";
-
-/** Default query limit for paginated results */
-export const DEFAULT_QUERY_LIMIT = 100;
+export { DEFAULT_QUERY_LIMIT, calculateLogStats } from "../utils";
 
 /**
  * Creates a storage adapter with automatic transformations and field mapping
  */
 export const createAdapterFactory = (
-	options: AdapterFactoryOptions
+	options: AdapterFactoryOptions	
 ): Storage => {
 	const config: AdapterFactoryConfig = {
 		supportsDates: true,
 		supportsBooleans: true,
 		usePlural: false,
 		disableIdGeneration: false,
-		disableTransformInput: false,
-		disableTransformOutput: false,
 		debugLogs: false,
 		...options.config,
 	};
@@ -40,19 +37,17 @@ export const createAdapterFactory = (
 		...options.schema,
 	};
 
-	// Debug logging helper
 	const debugLog = (...args: unknown[]) => {
 		if (!config.debugLogs) return;
 
 		if (typeof config.debugLogs === "boolean") {
-			console.log(`[${config.adapterName}]`, ...args);
+			logger.info(`[${config.adapterName}]`, ...args);
 			return;
 		}
 
-		// Check if the specific method is enabled
 		const method = typeof args[0] === "string" ? args[0] : null;
 		if (method && config.debugLogs[method as keyof typeof config.debugLogs]) {
-			console.log(`[${config.adapterName}]`, ...args);
+			logger.info(`[${config.adapterName}]`, ...args);
 		}
 	};
 
@@ -281,11 +276,6 @@ export const createAdapterFactory = (
 			// Generate ID if needed
 			if (!record.id && !config.disableIdGeneration) {
 				record.id = config.customIdGenerator ? config.customIdGenerator() : generateKey();
-			}
-
-			if (!config.disableTransformInput) {
-				const transformed = transformApiKeyInput(record);
-				debugLog("save", "Transformed:", transformed);
 			}
 
 			await baseAdapter.save(record);

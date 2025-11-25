@@ -9,8 +9,7 @@ import {
 	createAdapterFactory,
 	type SchemaConfig,
 } from "./adapter-factory";
-
-const DEFAULT_QUERY_LIMIT = 100;
+import { DEFAULT_QUERY_LIMIT, calculateLogStats } from "./utils";
 
 /**
  * Generic Prisma Client interface
@@ -420,21 +419,7 @@ export function createPrismaStore(options: PrismaAdapterConfig): Storage {
 									context.transformAuditLogOutput?.(row)!
 							);
 
-							const byAction: Partial<Record<string, number>> = {};
-							let lastActivity: string | null = null;
-
-							for (const log of logs) {
-								byAction[log.action] = (byAction[log.action] || 0) + 1;
-								if (!lastActivity || log.timestamp > lastActivity) {
-									lastActivity = log.timestamp;
-								}
-							}
-
-							return {
-								total: logs.length,
-								byAction,
-								lastActivity,
-							};
+							return calculateLogStats(logs);
 						},
 					}),
 			};

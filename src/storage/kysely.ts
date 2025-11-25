@@ -6,12 +6,12 @@ import type {
 	AuditLogStats,
 } from "../types/audit-log-types";
 import type { Storage } from "../types/storage-types";
+import { logger } from "../utils/logger";
 import {
 	createAdapterFactory,
 	type SchemaConfig,
 } from "./adapter-factory";
-
-const DEFAULT_QUERY_LIMIT = 100;
+import { DEFAULT_QUERY_LIMIT, calculateLogStats } from "./utils";
 
 /**
  * Generic Kysely database interface
@@ -82,7 +82,7 @@ function detectProvider(db: Kysely<KyselyDB>): DatabaseProvider {
 		return "mssql";
 	}
 
-	console.warn(
+	logger.warn(
 		"[Kysely Store] Could not detect database provider, defaulting to PostgreSQL"
 	);
 	return "pg";
@@ -151,7 +151,7 @@ export function createKyselyStore(options: KyselyAdapterConfig): Storage {
 	const provider = options.provider ?? detectProvider(db);
 
 	if (provider === "sqlite") {
-		console.warn(
+		logger.warn(
 			"[Kysely Store] SQLite detected: JSON queries use TEXT storage, not native JSON"
 		);
 	}
@@ -465,21 +465,7 @@ export function createKyselyStore(options: KyselyAdapterConfig): Storage {
 									context.transformAuditLogOutput?.(row)!
 							);
 
-							const byAction: Partial<Record<string, number>> = {};
-							let lastActivity: string | null = null;
-
-							for (const log of logs) {
-								byAction[log.action] = (byAction[log.action] || 0) + 1;
-								if (!lastActivity || log.timestamp > lastActivity) {
-									lastActivity = log.timestamp;
-								}
-							}
-
-							return {
-								total: logs.length,
-								byAction,
-								lastActivity,
-							};
+							return calculateLogStats(logs);
 						},
 					}),
 			};

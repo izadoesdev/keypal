@@ -6,12 +6,12 @@ import type {
 	AuditLogStats,
 } from "../types/audit-log-types";
 import type { Storage } from "../types/storage-types";
+import { logger } from "../utils/logger";
 import {
 	createAdapterFactory,
 	type SchemaConfig,
 } from "./adapter-factory";
-
-const DEFAULT_QUERY_LIMIT = 100;
+import { DEFAULT_QUERY_LIMIT, calculateLogStats } from "./utils";
 
 /**
  * Generic database interface for Drizzle
@@ -86,7 +86,7 @@ function detectProvider(db: DrizzleDB): DatabaseProvider {
 		return "sqlite";
 	}
 
-	console.warn(
+	logger.warn(
 		"[Drizzle Store] Could not detect database provider, defaulting to PostgreSQL"
 	);
 	return "pg";
@@ -152,7 +152,7 @@ export function createDrizzleStore(options: DrizzleAdapterConfig): Storage {
 	const provider = options.provider ?? detectProvider(db);
 
 	if (provider === "mysql" && auditLogTable) {
-		console.warn(
+		logger.warn(
 			"[Drizzle Store] MySQL detected: RETURNING clause not supported, using fallback queries"
 		);
 	}
@@ -457,21 +457,7 @@ export function createDrizzleStore(options: DrizzleAdapterConfig): Storage {
 									context.transformAuditLogOutput?.(row)!
 							);
 
-							const byAction: Partial<Record<string, number>> = {};
-							let lastActivity: string | null = null;
-
-							for (const log of logs) {
-								byAction[log.action] = (byAction[log.action] || 0) + 1;
-								if (!lastActivity || log.timestamp > lastActivity) {
-									lastActivity = log.timestamp;
-								}
-							}
-
-							return {
-								total: logs.length,
-								byAction,
-								lastActivity,
-							};
+							return calculateLogStats(logs);
 						},
 					}),
 			};

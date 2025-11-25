@@ -5,8 +5,7 @@ import type {
 	AuditLogStats,
 } from "../types/audit-log-types";
 import type { Storage } from "../types/storage-types";
-
-const DEFAULT_QUERY_LIMIT = 100;
+import { DEFAULT_QUERY_LIMIT, calculateLogStats } from "./utils";
 
 export class MemoryStore implements Storage {
 	private readonly keys = new Map<string, ApiKeyRecord>();
@@ -154,18 +153,7 @@ export class MemoryStore implements Storage {
 		const logs = Array.from(this.logs.values()).filter(
 			(log) => log.ownerId === ownerId
 		);
-
-		const byAction: Partial<Record<string, number>> = {};
-		let lastActivity: string | null = null;
-
-		for (const log of logs) {
-			byAction[log.action] = (byAction[log.action] || 0) + 1;
-			if (!lastActivity || log.timestamp > lastActivity) {
-				lastActivity = log.timestamp;
-			}
-		}
-
-		return { total: logs.length, byAction, lastActivity };
+		return calculateLogStats(logs);
 	}
 
 	private filterLogs(query: AuditLogQuery): AuditLog[] {

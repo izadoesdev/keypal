@@ -1,6 +1,6 @@
 {
   "name": "keypal",
-  "version": "0.0.213",
+  "version": "0.0.214",
   "description": "A TypeScript library for secure API key management with cryptographic hashing, expiration, scopes, and pluggable storage",
   "type": "module",
   "main": "./dist/index.mjs",
@@ -81,7 +81,7 @@
     "db:generate": "bunx drizzle-kit generate",
     "db:migrate": "bunx drizzle-kit migrate",
     "db:push": "bunx drizzle-kit push",
-    "prepare": "husky",
+    "prepare": "bunx husky || true",
     "prepublishOnly": "bun run build",
     "version:patch": "npm version patch --no-git-tag-version",
     "version:minor": "npm version minor --no-git-tag-version",

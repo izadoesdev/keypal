@@ -30,12 +30,6 @@ export type AdapterFactoryConfig = {
 	/** Custom ID generator function */
 	customIdGenerator?: () => string;
 
-	/** Whether to disable input transformations (for performance) */
-	disableTransformInput?: boolean;
-
-	/** Whether to disable output transformations (for performance) */
-	disableTransformOutput?: boolean;
-
 	/** Enable debug logging */
 	debugLogs?: boolean | {
 		save?: boolean;

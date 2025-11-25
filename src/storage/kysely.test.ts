@@ -4,7 +4,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { createKeys } from "../manager";
 import type { ApiKeyRecord } from "../types/api-key-types";
 import { ApiKeyErrorCode } from "../types/error-types";
-import { type ApiKeysDatabase, KyselyStore } from "./kysely";
+import { type KyselyDB, KyselyStore } from "./kysely";
 
 const REGEX_UPDATED_NAME = /Updated \d/;
 const MANY_SCOPES_COUNT = 25;
@@ -22,7 +22,7 @@ const OWNERS_COUNT = 10;
 
 describe("KyselyStore", () => {
 	let pool: Pool;
-	let db: Kysely<ApiKeysDatabase>;
+	let db: Kysely<KyselyDB>;
 	let store: KyselyStore;
 	let keys: ReturnType<typeof createKeys>;
 
@@ -42,7 +42,7 @@ describe("KyselyStore", () => {
 			throw error;
 		}
 
-		db = new Kysely<ApiKeysDatabase>({
+		db = new Kysely<KyselyDB>({
 			dialect: new PostgresDialect({ pool }),
 		});
 

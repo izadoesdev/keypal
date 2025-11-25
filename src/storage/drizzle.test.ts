@@ -47,6 +47,10 @@ describe("DrizzleStore", () => {
 			typeof drizzle<{ apikey: typeof apikey }>
 		>;
 
+		await pool.query("DROP TABLE IF EXISTS apikey CASCADE");
+		await pool.query("DROP INDEX IF EXISTS apikey_key_hash_idx");
+		await pool.query("DROP INDEX IF EXISTS apikey_key_hash_unique");
+
 		await pool.query(`
 			CREATE TABLE IF NOT EXISTS apikey (
 				id TEXT PRIMARY KEY NOT NULL,

@@ -5,9 +5,9 @@
 import type Redis from "ioredis";
 // import { Pool } from "pg";
 // import { apikey } from "../../src/drizzle/schema";
-import { createKeys } from "../../src/index";
+import { createKeys } from "../../../src/index";
 // import { DrizzleStore } from "../../src/storage/drizzle";
-import { MemoryStore } from "../../src/storage/memory";
+import { MemoryStore } from "../../../src/storage/memory";
 
 // import { PrismaStore } from "../../src/storage/prisma";
 // import { RedisStore } from "../../src/storage/redis";

@@ -1,7 +1,7 @@
 "use server";
 
 import { memoryKeys } from "@/lib/keys";
-import type { PermissionScope } from "../../src/types/permissions-types";
+import type { PermissionScope } from "../../../src/types/permissions-types";
 
 export async function createApiKey(options: {
 	ownerId: string;

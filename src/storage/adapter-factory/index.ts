@@ -13,6 +13,9 @@ import type {
 
 export * from "./types";
 
+/** Default query limit for paginated results */
+export const DEFAULT_QUERY_LIMIT = 100;
+
 /**
  * Creates a storage adapter with automatic transformations and field mapping
  */

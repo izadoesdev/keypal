@@ -6,6 +6,8 @@ import type {
 } from "../types/audit-log-types";
 import type { Storage } from "../types/storage-types";
 
+const DEFAULT_QUERY_LIMIT = 100;
+
 export class MemoryStore implements Storage {
 	private readonly keys = new Map<string, ApiKeyRecord>();
 	private readonly hashIndex = new Map<string, string>();
@@ -123,73 +125,32 @@ export class MemoryStore implements Storage {
 		this.ownerIndex.delete(ownerId);
 	}
 
-	saveLog(log: AuditLog): Promise<void> {
+	async saveLog(log: AuditLog): Promise<void> {
 		this.logs.set(log.id, log);
-		return Promise.resolve();
 	}
 
-	findLogs(query: AuditLogQuery): Promise<AuditLog[]> {
-		let logs = Array.from(this.logs.values());
-
-		if (query.keyId) logs = logs.filter((log) => log.keyId === query.keyId);
-		if (query.ownerId)
-			logs = logs.filter((log) => log.ownerId === query.ownerId);
-		if (query.action) logs = logs.filter((log) => log.action === query.action);
-		if (query.startDate)
-			logs = logs.filter((log) => log.timestamp >= query.startDate!);
-		if (query.endDate)
-			logs = logs.filter((log) => log.timestamp <= query.endDate!);
-
+	async findLogs(query: AuditLogQuery): Promise<AuditLog[]> {
+		const logs = this.filterLogs(query);
 		logs.sort((a, b) => b.timestamp.localeCompare(a.timestamp));
 
 		const offset = query.offset ?? 0;
-		// biome-ignore lint/style/noMagicNumbers: Default limit
-		const limit = query.limit ?? 100;
-		return Promise.resolve(logs.slice(offset, offset + limit));
+		const limit = query.limit ?? DEFAULT_QUERY_LIMIT;
+		return logs.slice(offset, offset + limit);
 	}
 
-	countLogs(query: AuditLogQuery): Promise<number> {
-		let logs = Array.from(this.logs.values());
-
-		if (query.keyId) logs = logs.filter((log) => log.keyId === query.keyId);
-		if (query.ownerId)
-			logs = logs.filter((log) => log.ownerId === query.ownerId);
-		if (query.action) logs = logs.filter((log) => log.action === query.action);
-		if (query.startDate)
-			logs = logs.filter((log) => log.timestamp >= query.startDate!);
-		if (query.endDate)
-			logs = logs.filter((log) => log.timestamp <= query.endDate!);
-
-		return Promise.resolve(logs.length);
+	async countLogs(query: AuditLogQuery): Promise<number> {
+		return this.filterLogs(query).length;
 	}
 
-	deleteLogs(query: AuditLogQuery): Promise<number> {
-		let logsToDelete = Array.from(this.logs.values());
-
-		if (query.keyId)
-			logsToDelete = logsToDelete.filter((log) => log.keyId === query.keyId);
-		if (query.ownerId)
-			logsToDelete = logsToDelete.filter(
-				(log) => log.ownerId === query.ownerId
-			);
-		if (query.action)
-			logsToDelete = logsToDelete.filter((log) => log.action === query.action);
-		if (query.startDate)
-			logsToDelete = logsToDelete.filter(
-				(log) => log.timestamp >= query.startDate!
-			);
-		if (query.endDate)
-			logsToDelete = logsToDelete.filter(
-				(log) => log.timestamp <= query.endDate!
-			);
-
+	async deleteLogs(query: AuditLogQuery): Promise<number> {
+		const logsToDelete = this.filterLogs(query);
 		for (const log of logsToDelete) {
 			this.logs.delete(log.id);
 		}
-		return Promise.resolve(logsToDelete.length);
+		return logsToDelete.length;
 	}
 
-	getLogStats(ownerId: string): Promise<AuditLogStats> {
+	async getLogStats(ownerId: string): Promise<AuditLogStats> {
 		const logs = Array.from(this.logs.values()).filter(
 			(log) => log.ownerId === ownerId
 		);
@@ -204,6 +165,21 @@ export class MemoryStore implements Storage {
 			}
 		}
 
-		return Promise.resolve({ total: logs.length, byAction, lastActivity });
+		return { total: logs.length, byAction, lastActivity };
+	}
+
+	private filterLogs(query: AuditLogQuery): AuditLog[] {
+		let logs = Array.from(this.logs.values());
+
+		if (query.keyId) logs = logs.filter((log) => log.keyId === query.keyId);
+		if (query.ownerId)
+			logs = logs.filter((log) => log.ownerId === query.ownerId);
+		if (query.action) logs = logs.filter((log) => log.action === query.action);
+		if (query.startDate)
+			logs = logs.filter((log) => log.timestamp >= query.startDate!);
+		if (query.endDate)
+			logs = logs.filter((log) => log.timestamp <= query.endDate!);
+
+		return logs;
 	}
 }

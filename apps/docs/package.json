@@ -6,7 +6,6 @@
   "scripts": {
     "dev": "vite dev",
     "build": "vite build",
-    "start": "node .output/server/index.mjs",
     "postinstall": "fumadocs-mdx",
     "lint": "biome check",
     "format": "biome format --write"

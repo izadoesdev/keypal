@@ -9,6 +9,9 @@ export default defineConfig({
   server: {
     port: 3000,
   },
+  build: {
+    outDir: '.output',
+  },
   plugins: [
     mdx(await import('./source.config')),
     tailwindcss(),
@@ -18,7 +21,6 @@ export default defineConfig({
     tanstackStart({
       prerender: {
         enabled: true,
-        
       },
     }),
     react(),

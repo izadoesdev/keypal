@@ -10,7 +10,7 @@ export default defineConfig({
     port: 3000,
   },
   build: {
-    outDir: '.output',
+    outDir: 'dist',
   },
   plugins: [
     mdx(await import('./source.config')),

@@ -1,0 +1,35 @@
+@import 'tailwindcss';
+@import 'fumadocs-ui/css/neutral.css';
+@import 'fumadocs-ui/css/preset.css';
+
+@theme {
+  --color-landing-bg: #ffffff;
+  --color-landing-bg-muted: #f9fafb;
+  --color-landing-text: #111827;
+  --color-landing-text-muted: #4b5563;
+  --color-landing-text-subtle: #6b7280;
+  --color-landing-border: #e5e7eb;
+  --color-landing-code-bg: #18181b;
+  --color-landing-code-text: #e4e4e7;
+  --color-landing-btn-primary-bg: #18181b;
+  --color-landing-btn-primary-text: #fafafa;
+  --color-landing-btn-secondary-bg: #ffffff;
+  --color-landing-btn-secondary-text: #18181b;
+  --color-landing-btn-border: #18181b;
+}
+
+.dark {
+  --color-landing-bg: #09090b;
+  --color-landing-bg-muted: #18181b;
+  --color-landing-text: #fafafa;
+  --color-landing-text-muted: #a1a1aa;
+  --color-landing-text-subtle: #71717a;
+  --color-landing-border: #27272a;
+  --color-landing-code-bg: #18181b;
+  --color-landing-code-text: #e4e4e7;
+  --color-landing-btn-primary-bg: #fafafa;
+  --color-landing-btn-primary-text: #09090b;
+  --color-landing-btn-secondary-bg: #09090b;
+  --color-landing-btn-secondary-text: #fafafa;
+  --color-landing-btn-border: #3f3f46;
+}

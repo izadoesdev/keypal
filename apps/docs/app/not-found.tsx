@@ -1,14 +1,10 @@
-import { Link } from '@tanstack/react-router';
+import Link from 'next/link';
 import { HomeLayout } from 'fumadocs-ui/layouts/home';
+import { baseOptions } from '@/lib/layout.shared';
 
-export function NotFound() {
+export default function NotFound() {
   return (
-    <HomeLayout
-      nav={{
-        title: 'keypal',
-      }}
-      className="text-center py-32 justify-center"
-    >
+    <HomeLayout {...baseOptions()} className="text-center py-32 justify-center">
       <div className="flex flex-col items-center gap-4">
         <h1 className="text-6xl font-bold text-fd-muted-foreground">404</h1>
         <h2 className="text-2xl font-semibold">Page Not Found</h2>
@@ -17,7 +13,7 @@ export function NotFound() {
           changed, or is temporarily unavailable.
         </p>
         <Link
-          to="/"
+          href="/"
           className="mt-4 px-4 py-2 rounded-lg bg-fd-primary text-fd-primary-foreground font-medium text-sm hover:opacity-90 transition-opacity"
         >
           Back to Home
@@ -26,3 +22,4 @@ export function NotFound() {
     </HomeLayout>
   );
 }
+

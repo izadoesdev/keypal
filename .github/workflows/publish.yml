@@ -124,6 +124,7 @@ jobs:
     name: Publish to npm
     needs: test
     runs-on: ubuntu-latest
+    environment: npm
     permissions:
       contents: read
       id-token: write

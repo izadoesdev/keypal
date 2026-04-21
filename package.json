@@ -1,6 +1,6 @@
 {
   "name": "keypal",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "A TypeScript library for secure API key management with cryptographic hashing, expiration, scopes, and pluggable storage",
   "type": "module",
   "main": "./dist/index.mjs",
@@ -117,10 +117,10 @@
     "drizzle-orm": "^0.44.6",
     "drizzle-kit": "^0.31.0",
     "@prisma/client": "^6.18.0",
-    "kysely": "^0.28.8"
+    "kysely": "^0.28.8",
+    "convex": "^1.28.0"
   },
   "dependencies": {
-    "convex": "^1.28.0",
     "nanoid": "^5.1.6",
     "typebox": "^1.0.43"
   },

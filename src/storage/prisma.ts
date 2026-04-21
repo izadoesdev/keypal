@@ -1,4 +1,4 @@
-import type { ApiKeyMetadata, ApiKeyRecord } from "../types/api-key-types";
+import type { ApiKeyMutableFields, ApiKeyRecord } from "../types/api-key-types";
 import type {
 	AuditLog,
 	AuditLogQuery,
@@ -244,23 +244,22 @@ export function createPrismaStore(options: PrismaAdapterConfig): Storage {
 					return this.findByTags([tag], ownerId);
 				},
 
-				async updateMetadata(
+				async update(
 					id: string,
-					metadata: Partial<ApiKeyMetadata>
+					fields: Partial<ApiKeyMutableFields>
 				): Promise<void> {
 					const existing = await this.findById(id);
 					if (!existing) {
 						throw new Error(`API key with id ${id} not found`);
 					}
 
-					const updated = { ...existing.metadata, ...metadata };
-					const updatedRecord = { ...existing, metadata: updated };
-					const row = transformApiKeyInput(updatedRecord);
+					const updated = { ...existing, ...fields };
+					const row = transformApiKeyInput(updated);
 					const idCol = context.getColumnName("apikey", "id");
 
 					if (context.schema.flattenMetadata) {
 						const updates: Record<string, unknown> = {};
-						for (const [key] of Object.entries(metadata)) {
+						for (const key of Object.keys(fields)) {
 							const colName = context.getColumnName("apikey", key);
 							updates[colName] = (row as Record<string, unknown>)[colName];
 						}
@@ -270,9 +269,21 @@ export function createPrismaStore(options: PrismaAdapterConfig): Storage {
 						});
 					} else {
 						const metadataCol = context.getColumnName("apikey", "metadata");
+						const metadata: Record<string, unknown> = {};
+						const mutableFields = [
+							"ownerId", "name", "description", "scopes", "resources",
+							"expiresAt", "revokedAt", "lastUsedAt", "createdAt",
+							"tags", "enabled", "rotatedTo",
+						];
+						for (const f of mutableFields) {
+							const val = (updated as Record<string, unknown>)[f];
+							if (val !== undefined) {
+								metadata[f] = val;
+							}
+						}
 						await model.update({
 							where: { [idCol]: id },
-							data: { [metadataCol]: updated },
+							data: { [metadataCol]: metadata },
 						});
 					}
 				},
@@ -448,7 +459,7 @@ export class PrismaStore implements Storage {
 	findByOwner = (ownerId: string) => this.storage.findByOwner(ownerId);
 	findByTags = (tags: string[], ownerId?: string) => this.storage.findByTags(tags, ownerId);
 	findByTag = (tag: string, ownerId?: string) => this.storage.findByTag(tag, ownerId);
-	updateMetadata = (id: string, metadata: Partial<ApiKeyMetadata>) => this.storage.updateMetadata(id, metadata);
+	update = (id: string, fields: Partial<ApiKeyMutableFields>) => this.storage.update(id, fields);
 	delete = (id: string) => this.storage.delete(id);
 	deleteByOwner = (ownerId: string) => this.storage.deleteByOwner(ownerId);
 	saveLog = (log: AuditLog) => this.storage.saveLog?.(log) ?? Promise.resolve();

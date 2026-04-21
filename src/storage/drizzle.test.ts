@@ -97,8 +97,8 @@ describe("DrizzleStore", () => {
 			expect(result).not.toBeNull();
 			expect(result?.id).toBe(record.id);
 			expect(result?.keyHash).toBe(record.keyHash);
-			expect(result?.metadata.name).toBe("Test Key");
-			expect(result?.metadata.scopes).toEqual(["read", "write"]);
+			expect(result?.name).toBe("Test Key");
+			expect(result?.scopes).toEqual(["read", "write"]);
 
 			// Verify we can verify the key
 			const verifyResult = await keys.verify(key);
@@ -114,17 +114,15 @@ describe("DrizzleStore", () => {
 			const record2: ApiKeyRecord = {
 				id: record1.id,
 				keyHash: keys.hashKey(keys.generateKey()),
-				metadata: {
-					ownerId: "user_different",
-					name: "Overwritten",
-				},
+				ownerId: "user_different",
+				name: "Overwritten",
 			};
 
 			await expect(store.save(record2)).rejects.toThrow();
 
 			const found = await store.findById(record1.id);
-			expect(found?.metadata.name).toBe("Original");
-			expect(found?.metadata.ownerId).toBe("user_overwrite");
+			expect(found?.name).toBe("Original");
+			expect(found?.ownerId).toBe("user_overwrite");
 		});
 	});
 
@@ -138,8 +136,8 @@ describe("DrizzleStore", () => {
 			const result = await store.findByHash(record.keyHash);
 			expect(result).not.toBeNull();
 			expect(result?.keyHash).toBe(record.keyHash);
-			expect(result?.metadata.ownerId).toBe("user_456");
-			expect(result?.metadata.name).toBe("Found Key");
+			expect(result?.ownerId).toBe("user_456");
+			expect(result?.name).toBe("Found Key");
 		});
 
 		it("should return null for non-existent hash", async () => {
@@ -158,7 +156,7 @@ describe("DrizzleStore", () => {
 			const result = await store.findById(record.id);
 			expect(result).not.toBeNull();
 			expect(result?.id).toBe(record.id);
-			expect(result?.metadata.name).toBe("By ID Key");
+			expect(result?.name).toBe("By ID Key");
 		});
 	});
 
@@ -183,10 +181,10 @@ describe("DrizzleStore", () => {
 
 			const results = await store.findByOwner(ownerId);
 			expect(results).toHaveLength(2);
-			expect(results.some((r) => r.metadata.scopes?.includes("read"))).toBe(
+			expect(results.some((r) => r.scopes?.includes("read"))).toBe(
 				true
 			);
-			expect(results.some((r) => r.metadata.scopes?.includes("write"))).toBe(
+			expect(results.some((r) => r.scopes?.includes("write"))).toBe(
 				true
 			);
 		});
@@ -255,7 +253,7 @@ describe("DrizzleStore", () => {
 		});
 	});
 
-	describe("updateMetadata", () => {
+	describe("update", () => {
 		it("should update metadata", async () => {
 			const { record } = await keys.create({
 				ownerId: "user_update",
@@ -263,14 +261,14 @@ describe("DrizzleStore", () => {
 				scopes: ["read"],
 			});
 
-			await store.updateMetadata(record.id, {
+			await store.update(record.id, {
 				name: "Updated Name",
 				scopes: ["admin", "write"],
 			});
 
 			const updated = await store.findById(record.id);
-			expect(updated?.metadata.name).toBe("Updated Name");
-			expect(updated?.metadata.scopes).toEqual(["admin", "write"]);
+			expect(updated?.name).toBe("Updated Name");
+			expect(updated?.scopes).toEqual(["admin", "write"]);
 		});
 
 		it("should merge updates with existing metadata", async () => {
@@ -280,14 +278,14 @@ describe("DrizzleStore", () => {
 				scopes: ["read"],
 			});
 
-			await store.updateMetadata(record.id, {
+			await store.update(record.id, {
 				description: "New description",
 			});
 
 			const updated = await store.findById(record.id);
-			expect(updated?.metadata.description).toBe("New description");
-			expect(updated?.metadata.name).toBe("Original Name");
-			expect(updated?.metadata.scopes).toEqual(["read"]);
+			expect(updated?.description).toBe("New description");
+			expect(updated?.name).toBe("Original Name");
+			expect(updated?.scopes).toEqual(["read"]);
 		});
 	});
 
@@ -389,7 +387,7 @@ describe("DrizzleStore", () => {
 
 			const found = await store.findById(record.id);
 
-			expect(found?.metadata.resources).toEqual({
+			expect(found?.resources).toEqual({
 				"project:123": ["read", "write"],
 				"project:456": ["read"],
 			});
@@ -407,7 +405,7 @@ describe("DrizzleStore", () => {
 			expect(verifyResult.valid).toBe(false);
 			expect(verifyResult.errorCode).toBe(ApiKeyErrorCode.EXPIRED);
 
-			expect(found?.metadata.expiresAt).toBe("2020-01-01T00:00:00.000Z");
+			expect(found?.expiresAt).toBe("2020-01-01T00:00:00.000Z");
 		});
 
 		it("should handle revoked keys", async () => {
@@ -415,7 +413,7 @@ describe("DrizzleStore", () => {
 				ownerId: "user_revoked",
 			});
 
-			await store.updateMetadata(record.id, {
+			await store.update(record.id, {
 				revokedAt: "2024-01-01T00:00:00.000Z",
 				rotatedTo: "key_new",
 			});
@@ -426,8 +424,8 @@ describe("DrizzleStore", () => {
 			expect(verifyResult.valid).toBe(false);
 			expect(verifyResult.errorCode).toBe(ApiKeyErrorCode.REVOKED);
 
-			expect(found?.metadata.revokedAt).toBe("2024-01-01T00:00:00.000Z");
-			expect(found?.metadata.rotatedTo).toBe("key_new");
+			expect(found?.revokedAt).toBe("2024-01-01T00:00:00.000Z");
+			expect(found?.rotatedTo).toBe("key_new");
 		});
 
 		it("should handle disabled keys", async () => {
@@ -442,7 +440,7 @@ describe("DrizzleStore", () => {
 
 			const found = await store.findById(record.id);
 
-			expect(found?.metadata.enabled).toBe(false);
+			expect(found?.enabled).toBe(false);
 		});
 
 		it("should handle keys with all metadata fields", async () => {
@@ -463,11 +461,11 @@ describe("DrizzleStore", () => {
 
 			const found = await store.findById(record.id);
 
-			expect(found?.metadata.name).toBe("Full Metadata Key");
-			expect(found?.metadata.description).toBe("Testing all fields");
-			expect(found?.metadata.scopes).toEqual(["read", "write", "admin"]);
-			expect(found?.metadata.enabled).toBe(true);
-			expect(found?.metadata.expiresAt).toBe("2025-12-31T00:00:00.000Z");
+			expect(found?.name).toBe("Full Metadata Key");
+			expect(found?.description).toBe("Testing all fields");
+			expect(found?.scopes).toEqual(["read", "write", "admin"]);
+			expect(found?.enabled).toBe(true);
+			expect(found?.expiresAt).toBe("2025-12-31T00:00:00.000Z");
 		});
 	});
 
@@ -482,7 +480,7 @@ describe("DrizzleStore", () => {
 
 			const found = await store.findById(record.id);
 
-			expect(found?.metadata.scopes).toEqual([]);
+			expect(found?.scopes).toEqual([]);
 		});
 
 		it("should handle keys with never expiring", async () => {
@@ -495,7 +493,7 @@ describe("DrizzleStore", () => {
 
 			const found = await store.findById(record.id);
 
-			expect(found?.metadata.expiresAt).toBeNull();
+			expect(found?.expiresAt).toBeNull();
 		});
 
 		it("should handle updating from non-existent to existing metadata", async () => {
@@ -505,14 +503,14 @@ describe("DrizzleStore", () => {
 			const verifyResult = await keys.verify(key);
 			expect(verifyResult.valid).toBe(true);
 
-			await store.updateMetadata(record.id, {
+			await store.update(record.id, {
 				name: "Added Name",
 				scopes: ["read"],
 			});
 
 			const updated = await store.findById(record.id);
-			expect(updated?.metadata.name).toBe("Added Name");
-			expect(updated?.metadata.scopes).toEqual(["read"]);
+			expect(updated?.name).toBe("Added Name");
+			expect(updated?.scopes).toEqual(["read"]);
 		});
 
 		it("should handle empty strings in text fields", async () => {
@@ -526,8 +524,8 @@ describe("DrizzleStore", () => {
 
 			const found = await store.findById(record.id);
 
-			expect(found?.metadata.name).toBe("");
-			expect(found?.metadata.description).toBe("");
+			expect(found?.name).toBe("");
+			expect(found?.description).toBe("");
 		});
 
 		it("should handle empty resources object", async () => {
@@ -540,7 +538,7 @@ describe("DrizzleStore", () => {
 
 			const found = await store.findById(record.id);
 
-			expect(found?.metadata.resources).toEqual({});
+			expect(found?.resources).toEqual({});
 		});
 
 		it("should handle null values vs undefined", async () => {
@@ -550,7 +548,7 @@ describe("DrizzleStore", () => {
 			const verifyResult = await keys.verify(key);
 			expect(verifyResult.valid).toBe(true);
 
-			await store.updateMetadata(record.id, {
+			await store.update(record.id, {
 				name: null as unknown as undefined,
 				description: undefined,
 				revokedAt: null,
@@ -558,16 +556,16 @@ describe("DrizzleStore", () => {
 
 			const found = await store.findById(record.id);
 
-			expect(found?.metadata.name).toBeNull();
-			expect(found?.metadata.description).toBeUndefined();
-			expect(found?.metadata.revokedAt).toBeNull();
+			expect(found?.name).toBeNull();
+			expect(found?.description).toBeUndefined();
+			expect(found?.revokedAt).toBeNull();
 		});
 	});
 
 	describe("Error Handling", () => {
 		it("should throw error when updating non-existent key", async () => {
 			await expect(
-				store.updateMetadata("nonexistent", { name: "Test" })
+				store.update("nonexistent", { name: "Test" })
 			).rejects.toThrow("API key with id nonexistent not found");
 		});
 
@@ -600,8 +598,8 @@ describe("DrizzleStore", () => {
 
 			const found = await store.findById(record.id);
 
-			expect(found?.metadata.scopes).toHaveLength(MANY_SCOPES_COUNT);
-			expect(found?.metadata.scopes).toEqual(scopes);
+			expect(found?.scopes).toHaveLength(MANY_SCOPES_COUNT);
+			expect(found?.scopes).toEqual(scopes);
 		});
 
 		it("should handle large resource objects", async () => {
@@ -620,7 +618,7 @@ describe("DrizzleStore", () => {
 
 			const found = await store.findById(record.id);
 
-			expect(Object.keys(found?.metadata.resources || {})).toHaveLength(
+			expect(Object.keys(found?.resources || {})).toHaveLength(
 				LARGE_RESOURCES_COUNT
 			);
 		});
@@ -638,8 +636,8 @@ describe("DrizzleStore", () => {
 
 			const found = await store.findById(record.id);
 
-			expect(found?.metadata.description).toBe(longDescription);
-			expect(found?.metadata.description).toHaveLength(LONG_DESCRIPTION_LENGTH);
+			expect(found?.description).toBe(longDescription);
+			expect(found?.description).toHaveLength(LONG_DESCRIPTION_LENGTH);
 		});
 
 		it("should handle many keys per owner", async () => {
@@ -684,7 +682,7 @@ describe("DrizzleStore", () => {
 
 			// Use updateMetadata instead of save to avoid unique constraint errors
 			const updates = Array.from({ length: CONCURRENT_UPDATES_COUNT }, (_, i) =>
-				store.updateMetadata(record.id, {
+				store.update(record.id, {
 					name: `Updated ${i}`,
 				})
 			);
@@ -692,7 +690,7 @@ describe("DrizzleStore", () => {
 			await Promise.all(updates);
 
 			const found = await store.findById(record.id);
-			expect(found?.metadata.name).toMatch(REGEX_UPDATED_NAME);
+			expect(found?.name).toMatch(REGEX_UPDATED_NAME);
 		});
 
 		it("should handle concurrent updates to different records", async () => {
@@ -706,7 +704,7 @@ describe("DrizzleStore", () => {
 			);
 
 			const promises = records.map((r, i) =>
-				store.updateMetadata(r.record.id, {
+				store.update(r.record.id, {
 					name: `Updated ${i}`,
 				})
 			);
@@ -719,7 +717,7 @@ describe("DrizzleStore", () => {
 					continue;
 				}
 				const found = await store.findById(record.record.id);
-				expect(found?.metadata.name).toBe(`Updated ${i}`);
+				expect(found?.name).toBe(`Updated ${i}`);
 			}
 		});
 
@@ -733,7 +731,7 @@ describe("DrizzleStore", () => {
 			const promises = Array.from(
 				{ length: CONCURRENT_UPDATES_COUNT },
 				(_, i) =>
-					store.updateMetadata(record.id, {
+					store.update(record.id, {
 						name: `Updated ${i}`,
 					})
 			);
@@ -741,7 +739,7 @@ describe("DrizzleStore", () => {
 			await Promise.all(promises);
 
 			const found = await store.findById(record.id);
-			expect(found?.metadata.name).toMatch(REGEX_UPDATED_NAME);
+			expect(found?.name).toMatch(REGEX_UPDATED_NAME);
 		});
 
 		it("should handle concurrent deletes", async () => {
@@ -767,7 +765,7 @@ describe("DrizzleStore", () => {
 
 			const [found] = await Promise.all([
 				store.findByHash(record.keyHash),
-				store.updateMetadata(record.id, {
+				store.update(record.id, {
 					name: "Updated During Lookup",
 				}),
 			]);
@@ -786,17 +784,17 @@ describe("DrizzleStore", () => {
 			// Simulate concurrent read/write
 			const results = await Promise.all([
 				store.findById(record.id),
-				store.updateMetadata(record.id, { name: "Update 1" }),
+				store.update(record.id, { name: "Update 1" }),
 				store.findById(record.id),
-				store.updateMetadata(record.id, { name: "Update 2" }),
+				store.update(record.id, { name: "Update 2" }),
 				store.findById(record.id),
 			]);
 
 			// Should always return consistent data
 			for (const result of results) {
-				if (result && "metadata" in result) {
-					expect(result.metadata.ownerId).toBe("user_no_corruption");
-					expect(result.metadata.scopes).toEqual(["read"]);
+				if (result && "ownerId" in result) {
+					expect(result.ownerId).toBe("user_no_corruption");
+					expect(result.scopes).toEqual(["read"]);
 				}
 			}
 		});
@@ -810,14 +808,14 @@ describe("DrizzleStore", () => {
 			const [found1, found2] = await Promise.all([
 				store.findById(record.id),
 				store
-					.updateMetadata(record.id, {
+					.update(record.id, {
 						name: "Updated",
 					})
 					.then(() => store.findById(record.id)),
 			]);
 
-			expect(found1?.metadata.name).toBe("Original");
-			expect(found2?.metadata.name).toBe("Updated");
+			expect(found1?.name).toBe("Original");
+			expect(found2?.name).toBe("Updated");
 		});
 	});
 
@@ -844,15 +842,15 @@ describe("DrizzleStore", () => {
 				scopes: ["read"],
 			});
 
-			await store.updateMetadata(record.id, {
+			await store.update(record.id, {
 				name: "Updated",
 				scopes: ["write"],
 			});
 
 			const found = await store.findById(record.id);
-			expect(found?.metadata.name).toBe("Updated");
-			expect(found?.metadata.scopes).toEqual(["write"]);
-			expect(found?.metadata.ownerId).toBe("user_atomic");
+			expect(found?.name).toBe("Updated");
+			expect(found?.scopes).toEqual(["write"]);
+			expect(found?.ownerId).toBe("user_atomic");
 		});
 	});
 
@@ -866,13 +864,13 @@ describe("DrizzleStore", () => {
 			// Verify via key manager
 			const verifyResult = await keys.verify(key);
 			expect(verifyResult.valid).toBe(true);
-			expect(verifyResult.record?.metadata.name).toBe(
+			expect(verifyResult.record?.name).toBe(
 				"🔑 😊 Привет 你好 مرحبا"
 			);
 
 			// Verify via direct storage lookup
 			const found = await store.findById(record.id);
-			expect(found?.metadata.name).toBe("🔑 😊 Привет 你好 مرحبا");
+			expect(found?.name).toBe("🔑 😊 Привет 你好 مرحبا");
 		});
 
 		it("should handle special characters in descriptions", async () => {
@@ -883,7 +881,7 @@ describe("DrizzleStore", () => {
 
 			const found = await store.findById(record.id);
 
-			expect(found?.metadata.description).toBe(
+			expect(found?.description).toBe(
 				"Test & <special> 'chars' \"quotes\" /slashes\\"
 			);
 		});
@@ -898,7 +896,7 @@ describe("DrizzleStore", () => {
 
 			const found = await store.findById(record.id);
 
-			expect(found?.metadata.description).toBe(multiline);
+			expect(found?.description).toBe(multiline);
 		});
 	});
 
@@ -913,10 +911,8 @@ describe("DrizzleStore", () => {
 			const duplicateRecord: ApiKeyRecord = {
 				id: record.id,
 				keyHash: keys.hashKey(keys.generateKey()),
-				metadata: {
-					ownerId: "user_2",
-					name: "Second",
-				},
+				ownerId: "user_2",
+				name: "Second",
 			};
 
 			await expect(store.save(duplicateRecord)).rejects.toThrow();
@@ -931,9 +927,7 @@ describe("DrizzleStore", () => {
 			const duplicateRecord: ApiKeyRecord = {
 				id: keys.generateKey().replace("sk_test_", "id_"),
 				keyHash: record.keyHash,
-				metadata: {
-					ownerId: "user_2",
-				},
+				ownerId: "user_2",
 			};
 
 			await expect(store.save(duplicateRecord)).rejects.toThrow();
@@ -949,13 +943,13 @@ describe("DrizzleStore", () => {
 			});
 
 			// Update lastUsedAt
-			await store.updateMetadata(record.id, {
+			await store.update(record.id, {
 				lastUsedAt: new Date().toISOString(),
 			});
 
 			const found = await store.findById(record.id);
-			expect(found?.metadata.lastUsedAt).toBeDefined();
-			expect(found?.metadata.lastUsedAt).not.toBe(before);
+			expect(found?.lastUsedAt).toBeDefined();
+			expect(found?.lastUsedAt).not.toBe(before);
 		});
 
 		it("should preserve other metadata when updating lastUsedAt", async () => {
@@ -966,15 +960,15 @@ describe("DrizzleStore", () => {
 				enabled: true,
 			});
 
-			await store.updateMetadata(record.id, {
+			await store.update(record.id, {
 				lastUsedAt: new Date().toISOString(),
 			});
 
 			const found = await store.findById(record.id);
-			expect(found?.metadata.name).toBe("Original Name");
-			expect(found?.metadata.scopes).toEqual(["read", "write"]);
-			expect(found?.metadata.enabled).toBe(true);
-			expect(found?.metadata.lastUsedAt).toBeDefined();
+			expect(found?.name).toBe("Original Name");
+			expect(found?.scopes).toEqual(["read", "write"]);
+			expect(found?.enabled).toBe(true);
+			expect(found?.lastUsedAt).toBeDefined();
 		});
 	});
 
@@ -997,8 +991,8 @@ describe("DrizzleStore", () => {
 
 			expect(newKey).toBeDefined();
 			expect(newKey).not.toBe(oldKey);
-			expect(newRecord.metadata.name).toBe("New Key");
-			expect(newRecord.metadata.scopes).toEqual(["read", "write"]);
+			expect(newRecord.name).toBe("New Key");
+			expect(newRecord.scopes).toEqual(["read", "write"]);
 			expect(rotatedOldRecord.id).toBe(oldRecord.id);
 
 			// Old key should be revoked
@@ -1012,8 +1006,8 @@ describe("DrizzleStore", () => {
 
 			// Old record should have rotatedTo reference
 			const oldRecordFound = await store.findById(oldRecord.id);
-			expect(oldRecordFound?.metadata.rotatedTo).toBe(newRecord.id);
-			expect(oldRecordFound?.metadata.revokedAt).toBeDefined();
+			expect(oldRecordFound?.rotatedTo).toBe(newRecord.id);
+			expect(oldRecordFound?.revokedAt).toBeDefined();
 		});
 
 		it("should preserve metadata when rotating without updates", async () => {
@@ -1026,9 +1020,9 @@ describe("DrizzleStore", () => {
 
 			const { record: newRecord } = await keys.rotate(oldRecord.id);
 
-			expect(newRecord.metadata.name).toBe("Original Key");
-			expect(newRecord.metadata.scopes).toEqual(["read", "write"]);
-			expect(newRecord.metadata.description).toBe("Original description");
+			expect(newRecord.name).toBe("Original Key");
+			expect(newRecord.scopes).toEqual(["read", "write"]);
+			expect(newRecord.description).toBe("Original description");
 		});
 
 		it("should throw error when rotating non-existent key", async () => {
@@ -1052,7 +1046,7 @@ describe("DrizzleStore", () => {
 			expect(verifyResult.errorCode).toBe(ApiKeyErrorCode.REVOKED);
 
 			const found = await store.findById(record.id);
-			expect(found?.metadata.revokedAt).toBeDefined();
+			expect(found?.revokedAt).toBeDefined();
 		});
 
 		it("should revoke all keys for an owner", async () => {
@@ -1071,7 +1065,7 @@ describe("DrizzleStore", () => {
 
 			const remaining = await store.findByOwner(ownerId);
 			for (const record of remaining) {
-				expect(record.metadata.revokedAt).toBeDefined();
+				expect(record.revokedAt).toBeDefined();
 			}
 		});
 	});
@@ -1090,7 +1084,7 @@ describe("DrizzleStore", () => {
 			expect(verifyResult.errorCode).toBe(ApiKeyErrorCode.DISABLED);
 
 			const found = await store.findById(record.id);
-			expect(found?.metadata.enabled).toBe(false);
+			expect(found?.enabled).toBe(false);
 		});
 
 		it("should enable a disabled key", async () => {
@@ -1106,7 +1100,7 @@ describe("DrizzleStore", () => {
 			expect(verifyResult.valid).toBe(true);
 
 			const found = await store.findById(record.id);
-			expect(found?.metadata.enabled).toBe(true);
+			expect(found?.enabled).toBe(true);
 		});
 	});
 
@@ -1168,7 +1162,7 @@ describe("DrizzleStore", () => {
 					if (!record) {
 						throw new Error("Record not found");
 					}
-					return store.updateMetadata(record.id, {
+					return store.update(record.id, {
 						name: `Updated ${i}`,
 					});
 				}
@@ -1178,7 +1172,7 @@ describe("DrizzleStore", () => {
 
 			// Verify updates
 			const updated = await store.findById(records[0]?.id || "");
-			expect(updated?.metadata.name).toBe("Updated 0");
+			expect(updated?.name).toBe("Updated 0");
 
 			// Delete some concurrently
 			const deletePromises = Array.from(

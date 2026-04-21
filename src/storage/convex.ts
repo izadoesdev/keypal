@@ -1,4 +1,4 @@
-import type { ApiKeyMetadata, ApiKeyRecord } from "../types/api-key-types";
+import type { ApiKeyMutableFields, ApiKeyRecord } from "../types/api-key-types";
 import type {
 	AuditLog,
 	AuditLogQuery,
@@ -6,60 +6,11 @@ import type {
 } from "../types/audit-log-types";
 import type { Storage } from "../types/storage-types";
 
-// WIP: This is a placeholder for the Convex storage adapter.
-
-// Convex types - these would be imported from convex/server in a real implementation
+// biome-ignore lint/suspicious/noExplicitAny: Convex types
 type ConvexCtx = any;
+// biome-ignore lint/suspicious/noExplicitAny: Convex types
 type ConvexApi = any;
 
-/**
- * Convex storage adapter for API keys
- *          
- * **Setup Instructions:**
- *
- * 1. Create your Convex schema:
- * ```ts
- * // convex/schema.ts
- * import { defineSchema, defineTable } from "convex/server";
- * import { v } from "convex/values";
- *
- * export default defineSchema({
- *   apiKeys: defineTable({
- *     keyHash: v.string(),
- *     metadata: v.any(),
- *   })
- *     .index("by_keyHash", ["keyHash"])
- *     .index("by_owner", ["metadata.ownerId"]),
- *
- *   auditLogs: defineTable({
- *     keyId: v.string(),
- *     ownerId: v.string(),
- *     action: v.string(),
- *     timestamp: v.string(),
- *     data: v.optional(v.any()),
- *   })
- *     .index("by_keyId", ["keyId"])
- *     .index("by_owner", ["ownerId"])
- *     .index("by_timestamp", ["timestamp"]),
- * });
- * ```
- *
- * 2. Create Convex functions for your tables
- * (You'll need to implement mutations/queries for CRUD operations)
- *
- * 3. Use the adapter:
- * ```typescript
- * import { ConvexStore } from 'keypal/convex';
- * import { api } from './_generated/api';
- *
- * const store = new ConvexStore({
- *   ctx, // Your Convex ctx (query or action)
- *   api, // Your Convex api object
- *   tableName: 'apiKeys',
- *   logTableName: 'auditLogs',
- * });
- * ```
- */
 export class ConvexStore implements Storage {
 	private readonly ctx: ConvexCtx;
 	private readonly api: ConvexApi;
@@ -78,11 +29,22 @@ export class ConvexStore implements Storage {
 		this.logTableName = options.logTableName ?? "auditLogs";
 	}
 
-	private toRecord(doc: any): ApiKeyRecord {
+	private toRecord(doc: Record<string, unknown>): ApiKeyRecord {
 		return {
-			id: doc._id,
-			keyHash: doc.keyHash,
-			metadata: doc.metadata as ApiKeyMetadata,
+			id: doc._id as string,
+			keyHash: doc.keyHash as string,
+			ownerId: doc.ownerId as string,
+			name: doc.name as string | undefined,
+			description: doc.description as string | undefined,
+			scopes: doc.scopes as string[] | undefined,
+			resources: doc.resources as Record<string, string[]> | undefined,
+			expiresAt: doc.expiresAt as string | null | undefined,
+			createdAt: doc.createdAt as string | undefined,
+			lastUsedAt: doc.lastUsedAt as string | undefined,
+			enabled: doc.enabled as boolean | undefined,
+			revokedAt: doc.revokedAt as string | null | undefined,
+			rotatedTo: doc.rotatedTo as string | null | undefined,
+			tags: doc.tags as string[] | undefined,
 		};
 	}
 
@@ -96,13 +58,10 @@ export class ConvexStore implements Storage {
 			throw new Error(`API key with id ${record.id} already exists`);
 		}
 
+		const { id: _id, ...rest } = record;
 		await this.ctx.runMutation(this.api.storage.create, {
 			table: this.tableName,
-			data: {
-				_id: record.id,
-				keyHash: record.keyHash,
-				metadata: record.metadata,
-			},
+			data: { _id: record.id, ...rest },
 		});
 	}
 
@@ -111,7 +70,6 @@ export class ConvexStore implements Storage {
 			table: this.tableName,
 			keyHash,
 		});
-
 		return result ? this.toRecord(result) : null;
 	}
 
@@ -120,7 +78,6 @@ export class ConvexStore implements Storage {
 			table: this.tableName,
 			id,
 		});
-
 		return result ? this.toRecord(result) : null;
 	}
 
@@ -129,8 +86,7 @@ export class ConvexStore implements Storage {
 			table: this.tableName,
 			ownerId,
 		});
-
-		return results.map((doc: any) => this.toRecord(doc));
+		return results.map((doc: Record<string, unknown>) => this.toRecord(doc));
 	}
 
 	async findByTags(tags: string[], ownerId?: string): Promise<ApiKeyRecord[]> {
@@ -139,26 +95,25 @@ export class ConvexStore implements Storage {
 			tags,
 			ownerId,
 		});
-
-		return results.map((doc: any) => this.toRecord(doc));
+		return results.map((doc: Record<string, unknown>) => this.toRecord(doc));
 	}
 
 	async findByTag(tag: string, ownerId?: string): Promise<ApiKeyRecord[]> {
 		return this.findByTags([tag], ownerId);
 	}
 
-	async updateMetadata(
+	async update(
 		id: string,
-		metadata: Partial<ApiKeyMetadata>
+		fields: Partial<ApiKeyMutableFields>
 	): Promise<void> {
 		if (!("runMutation" in this.ctx)) {
-			throw new Error("updateMetadata requires an ActionCtx (runMutation)");
+			throw new Error("update requires an ActionCtx (runMutation)");
 		}
 
-		await this.ctx.runMutation(this.api.storage.updateMetadata, {
+		await this.ctx.runMutation(this.api.storage.update, {
 			table: this.tableName,
 			id,
-			metadata,
+			fields,
 		});
 	}
 
@@ -208,12 +163,12 @@ export class ConvexStore implements Storage {
 			query,
 		});
 
-		return results.map((doc: any) => ({
-			id: doc._id,
-			keyId: doc.keyId,
-			ownerId: doc.ownerId,
-			action: doc.action,
-			timestamp: doc.timestamp,
+		return results.map((doc: Record<string, unknown>) => ({
+			id: doc._id as string,
+			keyId: doc.keyId as string,
+			ownerId: doc.ownerId as string,
+			action: doc.action as string,
+			timestamp: doc.timestamp as string,
 		}));
 	}
 
@@ -242,4 +197,3 @@ export class ConvexStore implements Storage {
 		});
 	}
 }
-

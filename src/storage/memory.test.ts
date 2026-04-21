@@ -28,7 +28,7 @@ describe("MemoryStore", () => {
 			expect(found).not.toBeNull();
 			expect(found?.id).toBe(record.id);
 			expect(found?.keyHash).toBe(record.keyHash);
-			expect(found?.metadata.ownerId).toBe("user_123");
+			expect(found?.ownerId).toBe("user_123");
 
 			// Verify we can verify the key
 			const verifyResult = await keys.verify(key);
@@ -43,9 +43,7 @@ describe("MemoryStore", () => {
 			const record2: ApiKeyRecord = {
 				id: record1.id,
 				keyHash: keys.hashKey(keys.generateKey()),
-				metadata: {
-					ownerId: "user_456",
-				},
+				ownerId: "user_456",
 			};
 
 			await expect(store.save(record2)).rejects.toThrow(
@@ -54,7 +52,7 @@ describe("MemoryStore", () => {
 
 			// Original record should remain unchanged
 			const found = await store.findById(record1.id);
-			expect(found?.metadata.ownerId).toBe("user_123");
+			expect(found?.ownerId).toBe("user_123");
 		});
 	});
 
@@ -68,8 +66,8 @@ describe("MemoryStore", () => {
 			const found = await store.findByHash(record.keyHash);
 			expect(found).not.toBeNull();
 			expect(found?.keyHash).toBe(record.keyHash);
-			expect(found?.metadata.ownerId).toBe("user_456");
-			expect(found?.metadata.name).toBe("Found Key");
+			expect(found?.ownerId).toBe("user_456");
+			expect(found?.name).toBe("Found Key");
 		});
 
 		it("should return null for non-existent hash", async () => {
@@ -88,7 +86,7 @@ describe("MemoryStore", () => {
 			const found = await store.findById(record.id);
 			expect(found).not.toBeNull();
 			expect(found?.id).toBe(record.id);
-			expect(found?.metadata.name).toBe("By ID Key");
+			expect(found?.name).toBe("By ID Key");
 		});
 
 		it("should return null for non-existent ID", async () => {
@@ -118,8 +116,8 @@ describe("MemoryStore", () => {
 
 			const found = await store.findByOwner(ownerId);
 			expect(found).toHaveLength(2);
-			expect(found.some((r) => r.metadata.scopes?.includes("read"))).toBe(true);
-			expect(found.some((r) => r.metadata.scopes?.includes("write"))).toBe(
+			expect(found.some((r) => r.scopes?.includes("read"))).toBe(true);
+			expect(found.some((r) => r.scopes?.includes("write"))).toBe(
 				true
 			);
 		});
@@ -193,7 +191,7 @@ describe("MemoryStore", () => {
 		});
 	});
 
-	describe("updateMetadata", () => {
+	describe("update", () => {
 		it("should update metadata for a record", async () => {
 			const { record } = await keys.create({
 				ownerId: "user_update",
@@ -201,14 +199,14 @@ describe("MemoryStore", () => {
 				scopes: ["read"],
 			});
 
-			await store.updateMetadata(record.id, {
+			await store.update(record.id, {
 				name: "Updated Name",
 				scopes: ["admin", "write"],
 			});
 
 			const updated = await store.findById(record.id);
-			expect(updated?.metadata.name).toBe("Updated Name");
-			expect(updated?.metadata.scopes).toEqual(["admin", "write"]);
+			expect(updated?.name).toBe("Updated Name");
+			expect(updated?.scopes).toEqual(["admin", "write"]);
 		});
 
 		it("should merge updates with existing metadata", async () => {
@@ -218,19 +216,19 @@ describe("MemoryStore", () => {
 				scopes: ["read"],
 			});
 
-			await store.updateMetadata(record.id, {
+			await store.update(record.id, {
 				description: "New description",
 			});
 
 			const updated = await store.findById(record.id);
-			expect(updated?.metadata.description).toBe("New description");
-			expect(updated?.metadata.name).toBe("Original Name");
-			expect(updated?.metadata.scopes).toEqual(["read"]);
+			expect(updated?.description).toBe("New description");
+			expect(updated?.name).toBe("Original Name");
+			expect(updated?.scopes).toEqual(["read"]);
 		});
 
 		it("should throw error for non-existent ID", async () => {
 			await expect(
-				store.updateMetadata("non-existent", { name: "New Name" })
+				store.update("non-existent", { name: "New Name" })
 			).rejects.toThrow("API key with id non-existent not found");
 		});
 	});
@@ -322,7 +320,7 @@ describe("MemoryStore", () => {
 			});
 
 			const found = await store.findById(record.id);
-			expect(found?.metadata.tags).toEqual([]);
+			expect(found?.tags).toEqual([]);
 		});
 
 		it("should handle undefined vs empty tags array", async () => {
@@ -350,7 +348,7 @@ describe("MemoryStore", () => {
 
 			const found = await store.findById(record.id);
 			expect(found).not.toBeNull();
-			expect(found?.metadata.ownerId).toBe("user_minimal");
+			expect(found?.ownerId).toBe("user_minimal");
 		});
 	});
 
@@ -374,7 +372,7 @@ describe("MemoryStore", () => {
 			expect(await store.findByOwner("owner_a")).toHaveLength(1);
 			expect(await store.findByOwner("owner_b")).toHaveLength(0);
 
-			await store.updateMetadata(record.id, { ownerId: "owner_b" });
+			await store.update(record.id, { ownerId: "owner_b" });
 
 			expect(await store.findByOwner("owner_a")).toHaveLength(0);
 			expect(await store.findByOwner("owner_b")).toHaveLength(1);
@@ -386,7 +384,7 @@ describe("MemoryStore", () => {
 			const duplicateHashRecord: ApiKeyRecord = {
 				id: "different_id",
 				keyHash: record.keyHash,
-				metadata: { ownerId: "user_2" },
+				ownerId: "user_2",
 			};
 
 			await expect(store.save(duplicateHashRecord)).rejects.toThrow(

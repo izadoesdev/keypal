@@ -78,8 +78,8 @@ describe("PrismaStore", () => {
 			expect(result).not.toBeNull();
 			expect(result?.id).toBe(record.id);
 			expect(result?.keyHash).toBe(record.keyHash);
-			expect(result?.metadata.name).toBe("Test Key");
-			expect(result?.metadata.scopes).toEqual(["read", "write"]);
+			expect(result?.name).toBe("Test Key");
+			expect(result?.scopes).toEqual(["read", "write"]);
 
 			// Verify we can verify the key
 			const verifyResult = await keys.verify(key);
@@ -106,13 +106,13 @@ describe("PrismaStore", () => {
 
 			const result = await store.findById(record.id);
 			expect(result).not.toBeNull();
-			expect(result?.metadata.name).toBe(metadata.name);
-			expect(result?.metadata.description).toBe(metadata.description);
-			expect(result?.metadata.scopes).toEqual(metadata.scopes);
-			expect(result?.metadata.resources).toEqual(metadata.resources);
-			expect(result?.metadata.enabled).toBe(metadata.enabled);
-			expect(result?.metadata.expiresAt).toBe(metadata.expiresAt);
-			expect(result?.metadata.createdAt).toBe(metadata.createdAt);
+			expect(result?.name).toBe(metadata.name);
+			expect(result?.description).toBe(metadata.description);
+			expect(result?.scopes).toEqual(metadata.scopes);
+			expect(result?.resources).toEqual(metadata.resources);
+			expect(result?.enabled).toBe(metadata.enabled);
+			expect(result?.expiresAt).toBe(metadata.expiresAt);
+			expect(result?.createdAt).toBe(metadata.createdAt);
 		});
 
 		it("should prevent duplicate IDs", async () => {
@@ -124,17 +124,15 @@ describe("PrismaStore", () => {
 			const record2: ApiKeyRecord = {
 				id: record1.id,
 				keyHash: keys.hashKey(keys.generateKey()),
-				metadata: {
-					ownerId: "user_different",
-					name: "Overwritten",
-				},
+				ownerId: "user_different",
+				name: "Overwritten",
 			};
 
 			await expect(store.save(record2)).rejects.toThrow();
 
 			const found = await store.findById(record1.id);
-			expect(found?.metadata.name).toBe("Original");
-			expect(found?.metadata.ownerId).toBe("user_overwrite");
+			expect(found?.name).toBe("Original");
+			expect(found?.ownerId).toBe("user_overwrite");
 		});
 
 		it("should handle concurrent saves to different records", async () => {
@@ -164,8 +162,8 @@ describe("PrismaStore", () => {
 			const result = await store.findByHash(record.keyHash);
 			expect(result).not.toBeNull();
 			expect(result?.keyHash).toBe(record.keyHash);
-			expect(result?.metadata.ownerId).toBe("user_456");
-			expect(result?.metadata.name).toBe("Found Key");
+			expect(result?.ownerId).toBe("user_456");
+			expect(result?.name).toBe("Found Key");
 		});
 
 		it("should return null for non-existent hash", async () => {
@@ -214,7 +212,7 @@ describe("PrismaStore", () => {
 			const result = await store.findById(record.id);
 			expect(result).not.toBeNull();
 			expect(result?.id).toBe(record.id);
-			expect(result?.metadata.name).toBe("By ID Key");
+			expect(result?.name).toBe("By ID Key");
 		});
 
 		it("should return null for non-existent ID", async () => {
@@ -257,10 +255,10 @@ describe("PrismaStore", () => {
 
 			const results = await store.findByOwner(ownerId);
 			expect(results).toHaveLength(2);
-			expect(results.some((r) => r.metadata.scopes?.includes("read"))).toBe(
+			expect(results.some((r) => r.scopes?.includes("read"))).toBe(
 				true
 			);
-			expect(results.some((r) => r.metadata.scopes?.includes("write"))).toBe(
+			expect(results.some((r) => r.scopes?.includes("write"))).toBe(
 				true
 			);
 		});
@@ -277,7 +275,7 @@ describe("PrismaStore", () => {
 
 			const results = await store.findByOwner("user_b");
 			expect(results).toHaveLength(1);
-			expect(results[0]?.metadata.ownerId).toBe("user_b");
+			expect(results[0]?.ownerId).toBe("user_b");
 		});
 
 		it("should handle many keys per owner", async () => {
@@ -379,7 +377,7 @@ describe("PrismaStore", () => {
 		});
 	});
 
-	describe("updateMetadata", () => {
+	describe("update", () => {
 		it("should update metadata for a record", async () => {
 			const { record } = await keys.create({
 				ownerId: "user_update",
@@ -387,14 +385,14 @@ describe("PrismaStore", () => {
 				scopes: ["read"],
 			});
 
-			await store.updateMetadata(record.id, {
+			await store.update(record.id, {
 				name: "Updated Name",
 				scopes: ["admin", "write"],
 			});
 
 			const updated = await store.findById(record.id);
-			expect(updated?.metadata.name).toBe("Updated Name");
-			expect(updated?.metadata.scopes).toEqual(["admin", "write"]);
+			expect(updated?.name).toBe("Updated Name");
+			expect(updated?.scopes).toEqual(["admin", "write"]);
 		});
 
 		it("should merge updates with existing metadata", async () => {
@@ -404,14 +402,14 @@ describe("PrismaStore", () => {
 				scopes: ["read"],
 			});
 
-			await store.updateMetadata(record.id, {
+			await store.update(record.id, {
 				description: "New description",
 			});
 
 			const updated = await store.findById(record.id);
-			expect(updated?.metadata.description).toBe("New description");
-			expect(updated?.metadata.name).toBe("Original Name");
-			expect(updated?.metadata.scopes).toEqual(["read"]);
+			expect(updated?.description).toBe("New description");
+			expect(updated?.name).toBe("Original Name");
+			expect(updated?.scopes).toEqual(["read"]);
 		});
 
 		it("should preserve unchanged fields", async () => {
@@ -423,20 +421,20 @@ describe("PrismaStore", () => {
 				resources: { "project:123": ["read"] },
 			});
 
-			await store.updateMetadata(record.id, {
+			await store.update(record.id, {
 				scopes: ["admin"],
 			});
 
 			const updated = await store.findById(record.id);
-			expect(updated?.metadata.name).toBe("Preserved Name");
-			expect(updated?.metadata.description).toBe("Preserved Description");
-			expect(updated?.metadata.resources).toEqual({ "project:123": ["read"] });
-			expect(updated?.metadata.scopes).toEqual(["admin"]);
+			expect(updated?.name).toBe("Preserved Name");
+			expect(updated?.description).toBe("Preserved Description");
+			expect(updated?.resources).toEqual({ "project:123": ["read"] });
+			expect(updated?.scopes).toEqual(["admin"]);
 		});
 
 		it("should throw error for non-existent ID", async () => {
 			await expect(
-				store.updateMetadata("non_existent", { name: "New Name" })
+				store.update("non_existent", { name: "New Name" })
 			).rejects.toThrow("API key with id non_existent not found");
 		});
 
@@ -448,7 +446,7 @@ describe("PrismaStore", () => {
 			const promises = Array.from(
 				{ length: CONCURRENT_UPDATES_COUNT },
 				(_, i) =>
-					store.updateMetadata(record.id, {
+					store.update(record.id, {
 						name: `Updated ${i}`,
 					})
 			);
@@ -456,7 +454,7 @@ describe("PrismaStore", () => {
 			await Promise.all(promises);
 
 			const updated = await store.findById(record.id);
-			expect(updated?.metadata.name).toMatch(REGEX_UPDATED_NAME);
+			expect(updated?.name).toMatch(REGEX_UPDATED_NAME);
 		});
 
 		it("should handle concurrent updates to different records", async () => {
@@ -470,7 +468,7 @@ describe("PrismaStore", () => {
 			);
 
 			const promises = records.map(({ record }, i) =>
-				store.updateMetadata(record.id, {
+				store.update(record.id, {
 					name: `Updated ${i}`,
 				})
 			);
@@ -479,7 +477,7 @@ describe("PrismaStore", () => {
 
 			for (const { record } of records) {
 				const updated = await store.findById(record.id);
-				expect(updated?.metadata.name).toMatch(REGEX_UPDATED_NAME);
+				expect(updated?.name).toMatch(REGEX_UPDATED_NAME);
 			}
 		});
 	});
@@ -631,7 +629,7 @@ describe("PrismaStore", () => {
 			});
 
 			const found = await store.findById(record.id);
-			expect(found?.metadata.tags).toEqual([]);
+			expect(found?.tags).toEqual([]);
 		});
 
 		it("should handle empty scopes array", async () => {
@@ -641,7 +639,7 @@ describe("PrismaStore", () => {
 			});
 
 			const found = await store.findById(record.id);
-			expect(found?.metadata.scopes).toEqual([]);
+			expect(found?.scopes).toEqual([]);
 		});
 
 		it("should handle empty resources object", async () => {
@@ -651,7 +649,7 @@ describe("PrismaStore", () => {
 			});
 
 			const found = await store.findById(record.id);
-			expect(found?.metadata.resources).toEqual({});
+			expect(found?.resources).toEqual({});
 		});
 
 		it("should handle empty strings in text fields", async () => {
@@ -662,8 +660,8 @@ describe("PrismaStore", () => {
 			});
 
 			const found = await store.findById(record.id);
-			expect(found?.metadata.name).toBe("");
-			expect(found?.metadata.description).toBe("");
+			expect(found?.name).toBe("");
+			expect(found?.description).toBe("");
 		});
 
 		it("should handle many scopes", async () => {
@@ -678,7 +676,7 @@ describe("PrismaStore", () => {
 			});
 
 			const found = await store.findById(record.id);
-			expect(found?.metadata.scopes).toEqual(scopes);
+			expect(found?.scopes).toEqual(scopes);
 		});
 
 		it("should handle large resource objects", async () => {
@@ -694,7 +692,7 @@ describe("PrismaStore", () => {
 			});
 
 			const found = await store.findById(record.id);
-			expect(found?.metadata.resources).toEqual(resources);
+			expect(found?.resources).toEqual(resources);
 		});
 
 		it("should handle very long description text", async () => {
@@ -706,7 +704,7 @@ describe("PrismaStore", () => {
 			});
 
 			const found = await store.findById(record.id);
-			expect(found?.metadata.description).toBe(description);
+			expect(found?.description).toBe(description);
 		});
 
 		it("should handle undefined vs empty tags array", async () => {
@@ -733,7 +731,7 @@ describe("PrismaStore", () => {
 
 			const found = await store.findById(record.id);
 			expect(found).not.toBeNull();
-			expect(found?.metadata.ownerId).toBe("user_minimal");
+			expect(found?.ownerId).toBe("user_minimal");
 		});
 
 		it("should handle null values correctly", async () => {
@@ -745,9 +743,9 @@ describe("PrismaStore", () => {
 			});
 
 			const found = await store.findById(record.id);
-			expect(found?.metadata.expiresAt).toBeNull();
-			expect(found?.metadata.revokedAt).toBeNull();
-			expect(found?.metadata.rotatedTo).toBeNull();
+			expect(found?.expiresAt).toBeNull();
+			expect(found?.revokedAt).toBeNull();
+			expect(found?.rotatedTo).toBeNull();
 		});
 
 		it("should preserve boolean false values", async () => {
@@ -757,7 +755,7 @@ describe("PrismaStore", () => {
 			});
 
 			const found = await store.findById(record.id);
-			expect(found?.metadata.enabled).toBe(false);
+			expect(found?.enabled).toBe(false);
 		});
 
 		it("should handle Unicode characters in strings", async () => {
@@ -768,8 +766,8 @@ describe("PrismaStore", () => {
 			});
 
 			const found = await store.findById(record.id);
-			expect(found?.metadata.name).toBe("🔑 Test Key 测试");
-			expect(found?.metadata.description).toBe("Ключ тест مفتاح 🎉");
+			expect(found?.name).toBe("🔑 Test Key 测试");
+			expect(found?.description).toBe("Ключ тест مفتاح 🎉");
 		});
 	});
 
@@ -785,7 +783,7 @@ describe("PrismaStore", () => {
 
 			const found = await store.findById(record.id);
 
-			expect(found?.metadata.resources).toEqual({
+			expect(found?.resources).toEqual({
 				"project:123": ["read", "write"],
 				"project:456": ["read"],
 			});
@@ -804,7 +802,7 @@ describe("PrismaStore", () => {
 			expect(verifyResult.error).toBe("API key has expired");
 			expect(verifyResult.errorCode).toBe(ApiKeyErrorCode.EXPIRED);
 
-			expect(found?.metadata.expiresAt).toBe("2020-01-01T00:00:00.000Z");
+			expect(found?.expiresAt).toBe("2020-01-01T00:00:00.000Z");
 		});
 
 		it("should handle revoked keys", async () => {
@@ -812,7 +810,7 @@ describe("PrismaStore", () => {
 				ownerId: "user_revoked",
 			});
 
-			await store.updateMetadata(record.id, {
+			await store.update(record.id, {
 				revokedAt: "2024-01-01T00:00:00.000Z",
 				rotatedTo: "key_new",
 			});
@@ -824,8 +822,8 @@ describe("PrismaStore", () => {
 			expect(verifyResult.error).toBe("API key has been revoked");
 			expect(verifyResult.errorCode).toBe(ApiKeyErrorCode.REVOKED);
 
-			expect(found?.metadata.revokedAt).toBe("2024-01-01T00:00:00.000Z");
-			expect(found?.metadata.rotatedTo).toBe("key_new");
+			expect(found?.revokedAt).toBe("2024-01-01T00:00:00.000Z");
+			expect(found?.rotatedTo).toBe("key_new");
 		});
 
 		it("should handle disabled keys", async () => {
@@ -841,7 +839,7 @@ describe("PrismaStore", () => {
 
 			const found = await store.findById(record.id);
 
-			expect(found?.metadata.enabled).toBe(false);
+			expect(found?.enabled).toBe(false);
 		});
 
 		it("should handle keys with all metadata fields", async () => {
@@ -862,17 +860,17 @@ describe("PrismaStore", () => {
 
 			const found = await store.findById(record.id);
 
-			expect(found?.metadata.name).toBe("Complete Key");
-			expect(found?.metadata.description).toBe(
+			expect(found?.name).toBe("Complete Key");
+			expect(found?.description).toBe(
 				"A complete key with all fields"
 			);
-			expect(found?.metadata.scopes).toEqual(["read", "write", "admin"]);
-			expect(found?.metadata.resources).toEqual({
+			expect(found?.scopes).toEqual(["read", "write", "admin"]);
+			expect(found?.resources).toEqual({
 				"project:123": ["read", "write"],
 				"project:456": ["read"],
 			});
-			expect(found?.metadata.enabled).toBe(true);
-			expect(found?.metadata.tags).toEqual(["production", "api"]);
+			expect(found?.enabled).toBe(true);
+			expect(found?.tags).toEqual(["production", "api"]);
 		});
 
 		it("should verify valid non-expired keys", async () => {
@@ -948,7 +946,7 @@ describe("PrismaStore", () => {
 					(_, i) => {
 						const record = records[i % records.length];
 						return record
-							? store.updateMetadata(record.record.id, {
+							? store.update(record.record.id, {
 									name: `Updated ${i}`,
 								})
 							: Promise.resolve();
@@ -983,7 +981,7 @@ describe("PrismaStore", () => {
 			});
 
 			const found = await store.findById(record.id);
-			expect(found?.metadata.resources).toEqual(resources);
+			expect(found?.resources).toEqual(resources);
 		});
 
 		it("should handle ISO timestamp strings", async () => {
@@ -998,8 +996,8 @@ describe("PrismaStore", () => {
 			});
 
 			const found = await store.findById(record.id);
-			expect(found?.metadata.createdAt).toBe(now);
-			expect(found?.metadata.expiresAt).toBe(future);
+			expect(found?.createdAt).toBe(now);
+			expect(found?.expiresAt).toBe(future);
 		});
 
 		it("should preserve order in scopes arrays", async () => {
@@ -1011,7 +1009,7 @@ describe("PrismaStore", () => {
 			});
 
 			const found = await store.findById(record.id);
-			expect(found?.metadata.scopes).toEqual(scopes);
+			expect(found?.scopes).toEqual(scopes);
 		});
 
 		it("should handle duplicate values in arrays", async () => {
@@ -1025,7 +1023,7 @@ describe("PrismaStore", () => {
 			});
 
 			const found = await store.findById(record.id);
-			expect(found?.metadata.scopes).toEqual(scopes);
+			expect(found?.scopes).toEqual(scopes);
 		});
 	});
 

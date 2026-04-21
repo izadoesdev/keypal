@@ -9,15 +9,15 @@ import {
 import { generateKey } from "./core/generate";
 import { hashKey } from "./core/hash";
 import {
-	hasAllScopesWithResources,
-	hasAnyScopeWithResources,
-	hasScopeWithResources,
+	hasAllScopes,
+	hasAnyScope,
+	hasScope,
 	type ScopeCheckOptions,
 } from "./core/scopes";
 import { validateKey } from "./core/validate";
 import { MemoryStore } from "./storage/memory";
 import { RedisStore } from "./storage/redis";
-import type { ApiKeyMetadata, ApiKeyRecord } from "./types/api-key-types";
+import type { ApiKeyMutableFields, ApiKeyRecord } from "./types/api-key-types";
 import type {
 	ActionContext,
 	AuditAction,
@@ -35,23 +35,13 @@ import type { PermissionScope } from "./types/permissions-types";
 import type { Storage } from "./types/storage-types";
 import { logger } from "./utils/logger";
 
-/**
- * Result of verifying an API key
- */
 export type VerifyResult = {
-	/** Whether the key is valid */
 	valid: boolean;
-	/** The API key record if valid */
 	record?: ApiKeyRecord;
-	/** Error message if invalid */
 	error?: string;
-	/** Error code for programmatic handling */
 	errorCode?: ApiKeyErrorCode;
 };
 
-/**
- * Minimal record stored in cache to reduce exposure
- */
 interface CacheRecord {
 	id: string;
 	expiresAt: string | null;
@@ -70,45 +60,13 @@ function isValidCacheRecord(data: unknown): data is CacheRecord {
 	);
 }
 
-/**
- * Options for verifying API keys
- */
 export type VerifyOptions = {
-	/** Skip cache lookup (always query storage) */
 	skipCache?: boolean;
-	/** Override header names to look for */
 	headerNames?: string[];
-	/** Override extractBearer behavior */
 	extractBearer?: boolean;
-	/** Skip updating lastUsedAt timestamp (useful when autoTrackUsage is enabled) */
 	skipTracking?: boolean;
 };
 
-/**
- * API Key Manager for creating, verifying, and managing API keys
- *
- * @example
- * ```typescript
- * const keys = createKeys({
- *   prefix: "sk_live_",
- *   storage: "redis",
- *   redis: redisClient
- * });
- *
- * // Create a key
- * const { key, record } = await keys.create({
- *   ownerId: "user_123",
- *   name: "Production Key",
- *   scopes: ["read", "write"]
- * });
- *
- * // Verify a key
- * const result = await keys.verify(key);
- * if (result.valid) {
- *   console.log("Key belongs to:", result.record?.metadata.ownerId);
- * }
- * ```
- */
 export class ApiKeyManager {
 	private readonly config: Config;
 	private readonly storage: Storage;
@@ -122,20 +80,19 @@ export class ApiKeyManager {
 	private readonly defaultContext?: ActionContext;
 
 	constructor(config: ConfigInput = {}) {
+		const salt = config.salt
+			? hashKey(config.salt, { algorithm: "sha256" })
+			: "";
 
-		const salt = config.salt ? hashKey(config.salt, { algorithm: "sha256" }) : "";
-		
 		this.config = {
 			prefix: config.prefix,
-			// biome-ignore lint/style/noMagicNumbers: 32 characters default
 			length: config.length ?? 32,
 			algorithm: config.algorithm ?? "sha256",
 			alphabet: config.alphabet,
-			salt
+			salt,
 		};
 
-		// biome-ignore lint/style/noMagicNumbers: 7 days default (604800 seconds)
-		this.revokedKeyTtl = config.revokedKeyTtl ?? 604_800; // 7 days default (604800 seconds)
+		this.revokedKeyTtl = config.revokedKeyTtl ?? 604_800;
 		this.isRedisStorage = config.storage === "redis";
 		this.autoTrackUsage = config.autoTrackUsage ?? true;
 		this.auditLogsEnabled = config.auditLogs ?? false;
@@ -202,21 +159,6 @@ export class ApiKeyManager {
 		});
 	}
 
-	/**
-	 * Extract API key from HTTP headers
-	 *
-	 * @param headers - HTTP headers object or Headers instance
-	 * @param options - Optional extraction options
-	 * @returns The extracted API key or null if not found
-	 *
-	 * @example
-	 * ```typescript
-	 * const key = keys.extractKey(req.headers);
-	 * if (key) {
-	 *   console.log("Found key:", key);
-	 * }
-	 * ```
-	 */
 	extractKey(
 		headers: Record<string, string | undefined> | Headers,
 		options?: KeyExtractionOptions
@@ -229,20 +171,6 @@ export class ApiKeyManager {
 		return extractKeyFromHeaders(headers, mergedOptions);
 	}
 
-	/**
-	 * Check if an API key is present in HTTP headers
-	 *
-	 * @param headers - HTTP headers object or Headers instance
-	 * @param options - Optional extraction options
-	 * @returns True if an API key is found in headers
-	 *
-	 * @example
-	 * ```typescript
-	 * if (keys.hasKey(req.headers)) {
-	 *   // API key is present
-	 * }
-	 * ```
-	 */
 	hasKey(
 		headers: Record<string, string | undefined> | Headers,
 		options?: KeyExtractionOptions
@@ -255,28 +183,6 @@ export class ApiKeyManager {
 		return hasApiKey(headers, mergedOptions);
 	}
 
-	/**
-	 * Verify an API key from a string or HTTP headers
-	 *
-	 * @param keyOrHeader - The API key string or HTTP headers object
-	 * @param options - Verification options
-	 * @returns Verification result with validity status and record
-	 *
-	 * @example
-	 * ```typescript
-	 * // Verify from string
-	 * const result = await keys.verify("sk_live_abc123...");
-	 *
-	 * // Verify from headers
-	 * const result = await keys.verify(req.headers);
-	 *
-	 * if (result.valid) {
-	 *   console.log("Owner:", result.record?.metadata.ownerId);
-	 * } else {
-	 *   console.log("Error:", result.error);
-	 * }
-	 * ```
-	 */
 	async verify(
 		keyOrHeader: string | Record<string, string | undefined> | Headers,
 		options: VerifyOptions = {}
@@ -286,7 +192,6 @@ export class ApiKeyManager {
 		if (typeof keyOrHeader === "string") {
 			key = keyOrHeader;
 			if (keyOrHeader.startsWith("Bearer ")) {
-				// biome-ignore lint/style/noMagicNumbers: Authorization prefix is always 7 characters
 				key = keyOrHeader.slice(7).trim();
 			}
 		} else {
@@ -314,13 +219,11 @@ export class ApiKeyManager {
 				try {
 					const parsed: unknown = JSON.parse(cached);
 
-					// Validate cache data shape to prevent issues from corrupted data
 					if (!isValidCacheRecord(parsed)) {
 						logger.error(
 							"CRITICAL: Invalid cache record shape, invalidating entry"
 						);
 						await this.cache.del(`apikey:${keyHash}`);
-						// Fall through to storage lookup
 					} else {
 						const cacheData = parsed;
 
@@ -344,12 +247,12 @@ export class ApiKeyManager {
 							return createErrorResult(ApiKeyErrorCode.INVALID_KEY);
 						}
 
-						if (isExpired(record.metadata.expiresAt)) {
+						if (isExpired(record.expiresAt)) {
 							await this.cache.del(`apikey:${keyHash}`);
 							return createErrorResult(ApiKeyErrorCode.EXPIRED);
 						}
 
-						if (record.metadata.revokedAt) {
+						if (record.revokedAt) {
 							await this.cache.del(`apikey:${keyHash}`);
 							return createErrorResult(ApiKeyErrorCode.REVOKED);
 						}
@@ -378,31 +281,39 @@ export class ApiKeyManager {
 			return createErrorResult(ApiKeyErrorCode.INVALID_KEY);
 		}
 
-		if (isExpired(record.metadata.expiresAt)) {
+		if (isExpired(record.expiresAt)) {
 			if (this.cache) {
 				await this.cache.del(`apikey:${keyHash}`);
 			}
 			return createErrorResult(ApiKeyErrorCode.EXPIRED);
 		}
 
-		if (record.metadata.revokedAt) {
+		if (record.revokedAt) {
 			if (this.cache) {
 				await this.cache.del(`apikey:${keyHash}`);
 			}
 			return createErrorResult(ApiKeyErrorCode.REVOKED);
 		}
 
-		if (record.metadata.enabled === false) {
+		if (record.enabled === false) {
 			return createErrorResult(ApiKeyErrorCode.DISABLED);
 		}
 
 		if (this.cache && !options.skipCache) {
 			try {
+				const expiresAt = record.expiresAt;
+				const revokedAt = record.revokedAt;
 				const cacheRecord: CacheRecord = {
 					id: record.id,
-					expiresAt: record.metadata.expiresAt ?? null,
-					revokedAt: record.metadata.revokedAt ?? null,
-					enabled: record.metadata.enabled ?? true,
+					expiresAt:
+						expiresAt instanceof Date
+							? expiresAt.toISOString()
+							: (expiresAt ?? null),
+					revokedAt:
+						revokedAt instanceof Date
+							? revokedAt.toISOString()
+							: (revokedAt ?? null),
+					enabled: record.enabled ?? true,
 				};
 				await this.cache.set(
 					`apikey:${keyHash}`,
@@ -414,7 +325,6 @@ export class ApiKeyManager {
 			}
 		}
 
-		// Track usage if enabled
 		if (this.autoTrackUsage && !options.skipTracking) {
 			this.updateLastUsed(record.id).catch((err) => {
 				logger.error("Failed to track usage:", err);
@@ -424,62 +334,39 @@ export class ApiKeyManager {
 		return { valid: true, record };
 	}
 
-	/**
-	 * Create a new API key
-	 *
-	 * @param metadata - Metadata for the API key (ownerId is required)
-	 * @returns The generated key string and the stored record
-	 *
-	 * @example
-	 * ```typescript
-	 * const { key, record } = await keys.create({
-	 *   ownerId: "user_123",
-	 *   name: "Production Key",
-	 *   description: "API key for production access",
-	 *   scopes: ["read", "write"],
-	 *   expiresAt: "2025-12-31T00:00:00.000Z",
-	 *   tags: ["production", "api"]
-	 * });
-	 *
-	 * console.log("New key:", key);
-	 * console.log("Key ID:", record.id);
-	 * ```
-	 */
 	async create(
-		metadata: Partial<ApiKeyMetadata>,
+		input: Partial<ApiKeyMutableFields>,
 		context?: ActionContext
 	): Promise<{ key: string; record: ApiKeyRecord }> {
 		const key = this.generateKey();
 		const keyHash = this.hashKey(key);
 		const now = new Date().toISOString();
-		const tags = metadata.tags?.map((t) => t.toLowerCase());
+		const tags = input.tags?.map((t) => t.toLowerCase());
 
 		const record: ApiKeyRecord = {
 			id: nanoid(),
 			keyHash,
-			metadata: {
-				ownerId: metadata.ownerId ?? "",
-				name: metadata.name,
-				description: metadata.description,
-				scopes: metadata.scopes,
-				resources: metadata.resources,
-				expiresAt: metadata.expiresAt ?? null,
-				createdAt: now,
-				lastUsedAt: undefined,
-				enabled: metadata.enabled ?? true,
-				revokedAt: null,
-				rotatedTo: null,
-				tags,
-			},
+			ownerId: input.ownerId ?? "",
+			name: input.name,
+			description: input.description,
+			scopes: input.scopes,
+			resources: input.resources,
+			expiresAt: input.expiresAt ?? null,
+			createdAt: now,
+			lastUsedAt: undefined,
+			enabled: input.enabled ?? true,
+			revokedAt: null,
+			rotatedTo: null,
+			tags,
 		};
 
 		await this.storage.save(record);
 
-		await this.logAction("created", record.id, record.metadata.ownerId, {
+		await this.logAction("created", record.id, record.ownerId, {
 			...context,
 			metadata: {
-				name: record.metadata.name,
-				scopes: record.metadata.scopes,
+				name: record.name,
+				scopes: record.scopes,
 				...context?.metadata,
 			},
 		});
@@ -513,17 +400,15 @@ export class ApiKeyManager {
 			throw createApiKeyError(ApiKeyErrorCode.KEY_NOT_FOUND);
 		}
 
-		// Check if already revoked
-		if (record.metadata.revokedAt) {
+		if (record.revokedAt) {
 			throw createApiKeyError(ApiKeyErrorCode.ALREADY_REVOKED);
 		}
 
-		await this.storage.updateMetadata(id, {
+		await this.storage.update(id, {
 			revokedAt: new Date().toISOString(),
 		});
 
-		// Create audit log
-		await this.logAction("revoked", id, record.metadata.ownerId, context);
+		await this.logAction("revoked", id, record.ownerId, context);
 
 		if (this.cache) {
 			try {
@@ -546,7 +431,6 @@ export class ApiKeyManager {
 
 	async revokeAll(ownerId: string): Promise<void> {
 		const records = await this.list(ownerId);
-
 		await Promise.all(records.map((record) => this.revoke(record.id)));
 	}
 
@@ -556,22 +440,17 @@ export class ApiKeyManager {
 			throw createApiKeyError(ApiKeyErrorCode.KEY_NOT_FOUND);
 		}
 
-		// Check if key is revoked
-		if (record.metadata.revokedAt) {
+		if (record.revokedAt) {
 			throw createApiKeyError(ApiKeyErrorCode.CANNOT_MODIFY_REVOKED);
 		}
 
-		// Check if already enabled
-		if (record.metadata.enabled) {
+		if (record.enabled) {
 			throw createApiKeyError(ApiKeyErrorCode.ALREADY_ENABLED);
 		}
 
-		await this.storage.updateMetadata(id, {
-			enabled: true,
-		});
+		await this.storage.update(id, { enabled: true });
 
-		// Create audit log
-		await this.logAction("enabled", id, record.metadata.ownerId, context);
+		await this.logAction("enabled", id, record.ownerId, context);
 
 		if (this.cache) {
 			try {
@@ -588,22 +467,17 @@ export class ApiKeyManager {
 			throw createApiKeyError(ApiKeyErrorCode.KEY_NOT_FOUND);
 		}
 
-		// Check if key is revoked
-		if (record.metadata.revokedAt) {
+		if (record.revokedAt) {
 			throw createApiKeyError(ApiKeyErrorCode.CANNOT_MODIFY_REVOKED);
 		}
 
-		// Check if already disabled
-		if (!record.metadata.enabled) {
+		if (!record.enabled) {
 			throw createApiKeyError(ApiKeyErrorCode.ALREADY_DISABLED);
 		}
 
-		await this.storage.updateMetadata(id, {
-			enabled: false,
-		});
+		await this.storage.update(id, { enabled: false });
 
-		// Create audit log
-		await this.logAction("disabled", id, record.metadata.ownerId, context);
+		await this.logAction("disabled", id, record.ownerId, context);
 
 		if (this.cache) {
 			try {
@@ -616,7 +490,7 @@ export class ApiKeyManager {
 
 	async rotate(
 		id: string,
-		metadata?: Partial<ApiKeyMetadata>,
+		input?: Partial<ApiKeyMutableFields>,
 		context?: ActionContext
 	): Promise<{ key: string; record: ApiKeyRecord; oldRecord: ApiKeyRecord }> {
 		const oldRecord = await this.findById(id);
@@ -624,30 +498,28 @@ export class ApiKeyManager {
 			throw createApiKeyError(ApiKeyErrorCode.KEY_NOT_FOUND);
 		}
 
-		// Check if key is already revoked
-		if (oldRecord.metadata.revokedAt) {
+		if (oldRecord.revokedAt) {
 			throw createApiKeyError(ApiKeyErrorCode.CANNOT_MODIFY_REVOKED);
 		}
 
 		const { key, record: newRecord } = await this.create({
-			ownerId: oldRecord.metadata.ownerId,
-			name: metadata?.name ?? oldRecord.metadata.name,
-			description: metadata?.description ?? oldRecord.metadata.description,
-			scopes: metadata?.scopes ?? oldRecord.metadata.scopes,
-			resources: metadata?.resources ?? oldRecord.metadata.resources,
-			expiresAt: metadata?.expiresAt ?? oldRecord.metadata.expiresAt,
-			tags: metadata?.tags
-				? metadata.tags.map((t) => t.toLowerCase())
-				: oldRecord.metadata.tags,
+			ownerId: oldRecord.ownerId,
+			name: input?.name ?? oldRecord.name,
+			description: input?.description ?? oldRecord.description,
+			scopes: input?.scopes ?? oldRecord.scopes,
+			resources: input?.resources ?? oldRecord.resources,
+			expiresAt: input?.expiresAt ?? oldRecord.expiresAt,
+			tags: input?.tags
+				? input.tags.map((t) => t.toLowerCase())
+				: oldRecord.tags,
 		});
 
-		await this.storage.updateMetadata(id, {
+		await this.storage.update(id, {
 			rotatedTo: newRecord.id,
 			revokedAt: new Date().toISOString(),
 		});
 
-		// Create audit log with rotation details
-		await this.logAction("rotated", id, oldRecord.metadata.ownerId, {
+		await this.logAction("rotated", id, oldRecord.ownerId, {
 			...context,
 			metadata: {
 				rotatedTo: newRecord.id,
@@ -677,15 +549,11 @@ export class ApiKeyManager {
 	}
 
 	async updateLastUsed(id: string): Promise<void> {
-		await this.storage.updateMetadata(id, {
+		await this.storage.update(id, {
 			lastUsedAt: new Date().toISOString(),
 		});
 	}
 
-	/**
-	 * Create an audit log entry for a key action
-	 * @private
-	 */
 	private async logAction(
 		action: AuditAction,
 		keyId: string,
@@ -696,11 +564,9 @@ export class ApiKeyManager {
 			return;
 		}
 
-		// Merge default context with action-specific context
 		const mergedContext = {
 			...this.defaultContext,
 			...context,
-			// Merge metadata objects if both exist
 			...(this.defaultContext?.metadata || context?.metadata
 				? {
 						metadata: {
@@ -727,22 +593,6 @@ export class ApiKeyManager {
 		}
 	}
 
-	/**
-	 * Get audit logs with optional filters
-	 *
-	 * @param query - Query options for filtering audit logs
-	 * @returns Array of audit log entries
-	 *
-	 * @example
-	 * ```typescript
-	 * const logs = await keys.getLogs({
-	 *   keyId: 'key_123',
-	 *   startDate: '2025-01-01',
-	 *   endDate: '2025-12-31',
-	 *   limit: 100
-	 * });
-	 * ```
-	 */
 	async getLogs(query: AuditLogQuery = {}): Promise<AuditLog[]> {
 		if (!this.auditLogsEnabled) {
 			throw createApiKeyError(ApiKeyErrorCode.AUDIT_LOGGING_DISABLED);
@@ -755,17 +605,6 @@ export class ApiKeyManager {
 		return await this.storage.findLogs(query);
 	}
 
-	/**
-	 * Count audit logs matching query
-	 *
-	 * @param query - Query options for filtering audit logs
-	 * @returns Number of matching logs
-	 *
-	 * @example
-	 * ```typescript
-	 * const count = await keys.countLogs({ action: 'created' });
-	 * ```
-	 */
 	async countLogs(query: AuditLogQuery = {}): Promise<number> {
 		if (!this.auditLogsEnabled) {
 			throw createApiKeyError(ApiKeyErrorCode.AUDIT_LOGGING_DISABLED);
@@ -778,20 +617,6 @@ export class ApiKeyManager {
 		return await this.storage.countLogs(query);
 	}
 
-	/**
-	 * Delete audit logs matching query
-	 *
-	 * @param query - Query options for filtering logs to delete
-	 * @returns Number of logs deleted
-	 *
-	 * @example
-	 * ```typescript
-	 * // Delete old logs
-	 * const deleted = await keys.deleteLogs({
-	 *   endDate: '2024-01-01'
-	 * });
-	 * ```
-	 */
 	async deleteLogs(query: AuditLogQuery): Promise<number> {
 		if (!this.auditLogsEnabled) {
 			throw createApiKeyError(ApiKeyErrorCode.AUDIT_LOGGING_DISABLED);
@@ -804,34 +629,10 @@ export class ApiKeyManager {
 		return await this.storage.deleteLogs(query);
 	}
 
-	/**
-	 * Delete all audit logs for a specific key
-	 *
-	 * @param keyId - The key ID to delete logs for
-	 * @returns Number of logs deleted
-	 *
-	 * @example
-	 * ```typescript
-	 * const deleted = await keys.clearLogs('key_123');
-	 * ```
-	 */
 	async clearLogs(keyId: string): Promise<number> {
 		return await this.deleteLogs({ keyId });
 	}
 
-	/**
-	 * Get statistics about audit logs for an owner
-	 *
-	 * @param ownerId - Owner ID to get stats for
-	 * @returns Statistics including total count, counts by action, and last activity
-	 *
-	 * @example
-	 * ```typescript
-	 * const stats = await keys.getLogStats('user_123');
-	 * console.log(`Total logs: ${stats.total}`);
-	 * console.log(`Created: ${stats.byAction.created}`);
-	 * ```
-	 */
 	async getLogStats(ownerId: string): Promise<AuditLogStats> {
 		if (!this.auditLogsEnabled) {
 			throw createApiKeyError(ApiKeyErrorCode.AUDIT_LOGGING_DISABLED);
@@ -856,103 +657,42 @@ export class ApiKeyManager {
 	}
 
 	isExpired(record: ApiKeyRecord): boolean {
-		return isExpired(record.metadata.expiresAt);
+		return isExpired(record.expiresAt);
 	}
 
-	/**
-	 * Check if an API key has a specific scope
-	 *
-	 * @param record - The API key record
-	 * @param scope - Required scope to check
-	 * @param options - Optional scope check options (e.g., resource filtering)
-	 * @returns True if the key has the required scope
-	 *
-	 * @example
-	 * ```typescript
-	 * const record = await storage.findById("key_id");
-	 * if (keys.hasScope(record, "read")) {
-	 *   // Key has read permission
-	 * }
-	 *
-	 * // Check for resource-specific scope
-	 * if (keys.hasScope(record, "write", { resource: "project:123" })) {
-	 *   // Key can write to project 123
-	 * }
-	 * ```
-	 */
 	hasScope(
 		record: ApiKeyRecord,
 		scope: PermissionScope,
 		options?: ScopeCheckOptions
 	): boolean {
-		return hasScopeWithResources(
-			record.metadata.scopes,
-			record.metadata.resources,
-			scope,
-			options
-		);
+		return hasScope(record.scopes, scope, {
+			...options,
+			resources: options?.resources ?? record.resources,
+		});
 	}
 
-	/**
-	 * Check if an API key has any of the required scopes
-	 *
-	 * @param record - The API key record
-	 * @param requiredScopes - Array of scopes to check
-	 * @param options - Optional scope check options
-	 * @returns True if the key has at least one of the required scopes
-	 *
-	 * @example
-	 * ```typescript
-	 * if (keys.hasAnyScope(record, ["read", "write"])) {
-	 *   // Key has read OR write permission
-	 * }
-	 * ```
-	 */
 	hasAnyScope(
 		record: ApiKeyRecord,
 		requiredScopes: PermissionScope[],
 		options?: ScopeCheckOptions
 	): boolean {
-		return hasAnyScopeWithResources(
-			record.metadata.scopes,
-			record.metadata.resources,
-			requiredScopes,
-			options
-		);
+		return hasAnyScope(record.scopes, requiredScopes, {
+			...options,
+			resources: options?.resources ?? record.resources,
+		});
 	}
 
-	/**
-	 * Check if an API key has all required scopes
-	 *
-	 * @param record - The API key record
-	 * @param requiredScopes - Array of scopes to check
-	 * @param options - Optional scope check options
-	 * @returns True if the key has all required scopes
-	 *
-	 * @example
-	 * ```typescript
-	 * if (keys.hasAllScopes(record, ["read", "write"])) {
-	 *   // Key has read AND write permissions
-	 * }
-	 * ```
-	 */
 	hasAllScopes(
 		record: ApiKeyRecord,
 		requiredScopes: PermissionScope[],
 		options?: ScopeCheckOptions
 	): boolean {
-		return hasAllScopesWithResources(
-			record.metadata.scopes,
-			record.metadata.resources,
-			requiredScopes,
-			options
-		);
+		return hasAllScopes(record.scopes, requiredScopes, {
+			...options,
+			resources: options?.resources ?? record.resources,
+		});
 	}
 
-	/**
-	 * Verify API key from headers and return the record or null
-	 * This is a convenience method that combines verify() with automatic null handling
-	 */
 	async verifyFromHeaders(
 		headers: Record<string, string | undefined> | Headers,
 		options?: VerifyOptions
@@ -961,88 +701,43 @@ export class ApiKeyManager {
 		return result.valid ? (result.record ?? null) : null;
 	}
 
-	/**
-	 * Check if an API key has a specific scope for a resource
-	 * @param record - The API key record
-	 * @param resourceType - Type of resource (e.g., 'website', 'project', 'team')
-	 * @param resourceId - ID of the resource
-	 * @param scope - Required scope to check
-	 */
 	checkResourceScope(
 		record: ApiKeyRecord | null,
 		resourceType: string,
 		resourceId: string,
 		scope: PermissionScope
 	): boolean {
-		if (!record) {
-			return false;
-		}
+		if (!record) return false;
 		return this.hasScope(record, scope, {
 			resource: `${resourceType}:${resourceId}`,
 		});
 	}
 
-	/**
-	 * Check if an API key has any of the required scopes for a resource
-	 */
 	checkResourceAnyScope(
 		record: ApiKeyRecord | null,
 		resourceType: string,
 		resourceId: string,
 		scopes: PermissionScope[]
 	): boolean {
-		if (!record) {
-			return false;
-		}
+		if (!record) return false;
 		return this.hasAnyScope(record, scopes, {
 			resource: `${resourceType}:${resourceId}`,
 		});
 	}
 
-	/**
-	 * Check if an API key has all required scopes for a resource
-	 */
 	checkResourceAllScopes(
 		record: ApiKeyRecord | null,
 		resourceType: string,
 		resourceId: string,
 		scopes: PermissionScope[]
 	): boolean {
-		if (!record) {
-			return false;
-		}
+		if (!record) return false;
 		return this.hasAllScopes(record, scopes, {
 			resource: `${resourceType}:${resourceId}`,
 		});
 	}
 }
 
-/**
- * Create an API key manager instance
- *
- * @param config - Configuration options for key generation and storage
- * @returns An ApiKeyManager instance for creating and verifying keys
- *
- * @example
- * ```typescript
- * // Simple in-memory setup
- * const keys = createKeys({ prefix: "sk_" });
- *
- * // Redis setup with caching
- * const keys = createKeys({
- *   prefix: "sk_live_",
- *   storage: "redis",
- *   redis: redisClient,
- *   cache: true,
- *   cacheTtl: 300
- * });
- *
- * // Custom storage adapter
- * const keys = createKeys({
- *   storage: myCustomStorage
- * });
- * ```
- */
 export function createKeys(config: ConfigInput = {}): ApiKeyManager {
 	return new ApiKeyManager(config);
 }

@@ -1,48 +1,23 @@
-import type { ApiKeyMetadata, ApiKeyRecord } from "./api-key-types";
+import type { ApiKeyMutableFields, ApiKeyRecord } from "./api-key-types";
 import type { AuditLog, AuditLogQuery, AuditLogStats } from "./audit-log-types";
 
 /**
  * Storage interface for persisting API keys
  */
 export type Storage = {
-	/**
-	 * Save an API key record to storage
-	 */
 	save(record: ApiKeyRecord): Promise<void>;
 
-	/**
-	 * Find an API key record by its hash
-	 */
 	findByHash(keyHash: string): Promise<ApiKeyRecord | null>;
 
-	/**
-	 * Find an API key record by ID
-	 */
 	findById(id: string): Promise<ApiKeyRecord | null>;
 
-	/**
-	 * Find all API keys for a specific owner
-	 */
 	findByOwner(ownerId: string): Promise<ApiKeyRecord[]>;
 
-	/**
-	 * Find all API keys by tags and optionally by owner
-	 * @param tags - Tags to search for
-	 * @param ownerId - Optional owner ID to filter results
-	 */
 	findByTags(tags: string[], ownerId?: string): Promise<ApiKeyRecord[]>;
 
-	/**
-	 * Find all API keys by tag and optionally by owner
-	 * @param tag - Tag to search for
-	 * @param ownerId - Optional owner ID to filter results
-	 */
 	findByTag(tag: string, ownerId?: string): Promise<ApiKeyRecord[]>;
 
-	/**
-	 * Update metadata for an existing key
-	 */
-	updateMetadata(id: string, metadata: Partial<ApiKeyMetadata>): Promise<void>;
+	update(id: string, fields: Partial<ApiKeyMutableFields>): Promise<void>;
 
 	/**
 	 * Delete an API key record

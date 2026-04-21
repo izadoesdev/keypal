@@ -1,5 +1,10 @@
-import type { ApiKeyRecord, ApiKeyMetadata } from "../../types/api-key-types";
-import type { AuditLog, AuditLogQuery, AuditLogStats, AuditAction } from "../../types/audit-log-types";
+import type { ApiKeyMutableFields, ApiKeyRecord } from "../../types/api-key-types";
+import type {
+	AuditLog,
+	AuditLogQuery,
+	AuditLogStats,
+	AuditAction,
+} from "../../types/audit-log-types";
 import type { Storage } from "../../types/storage-types";
 import { generateKey } from "../../core/generate";
 import { logger } from "../../utils/logger";
@@ -8,18 +13,31 @@ import type {
 	AdapterFactoryOptions,
 	AdapterContext,
 	SchemaConfig,
-	ApiKeyColumnMapping,
-	AuditLogColumnMapping,
 } from "./types";
 
 export * from "./types";
 export { DEFAULT_QUERY_LIMIT, calculateLogStats } from "../utils";
 
-/**
- * Creates a storage adapter with automatic transformations and field mapping
- */
+const MUTABLE_FIELDS = [
+	"ownerId",
+	"name",
+	"description",
+	"scopes",
+	"resources",
+	"rateLimit",
+	"expiresAt",
+	"revokedAt",
+	"lastUsedAt",
+	"createdAt",
+	"tags",
+	"allowedIps",
+	"allowedOrigins",
+	"enabled",
+	"rotatedTo",
+] as const;
+
 export const createAdapterFactory = (
-	options: AdapterFactoryOptions	
+	options: AdapterFactoryOptions
 ): Storage => {
 	const config: AdapterFactoryConfig = {
 		supportsDates: true,
@@ -51,22 +69,21 @@ export const createAdapterFactory = (
 		}
 	};
 
-	// Get table name
 	const getTableName = (table: "apikey" | "auditlog"): string => {
 		return table === "apikey" ? schema.apiKeyTable! : schema.auditLogTable!;
 	};
 
-	// Get column name with mapping
-	const getColumnName = (table: "apikey" | "auditlog", field: string): string => {
+	const getColumnName = (
+		table: "apikey" | "auditlog",
+		field: string
+	): string => {
 		if (table === "apikey") {
 			const mapping = schema.apiKeyColumns || {};
-			
-			// Check if it's a metadata field
+
 			if (mapping.metadataColumns && field in mapping.metadataColumns) {
 				return mapping.metadataColumns[field] || field;
 			}
-			
-			// Check standard fields
+
 			if (field === "id") return mapping.id || "id";
 			if (field === "keyHash") return mapping.keyHash || "keyHash";
 			if (field === "metadata") return mapping.metadata || "metadata";
@@ -78,135 +95,107 @@ export const createAdapterFactory = (
 		return field;
 	};
 
-	// Transform API key record for database insertion
-	const transformApiKeyInput = (record: ApiKeyRecord): Record<string, unknown> => {
+	const transformApiKeyInput = (
+		record: ApiKeyRecord
+	): Record<string, unknown> => {
 		const transformed: Record<string, unknown> = {};
 
-		// Handle flattened metadata schema
 		if (schema.flattenMetadata) {
-			// Store ID and keyHash
 			transformed[getColumnName("apikey", "id")] = record.id;
 			transformed[getColumnName("apikey", "keyHash")] = record.keyHash;
 
-			// Flatten metadata fields
-			for (const [key, value] of Object.entries(record.metadata)) {
-				const colName = getColumnName("apikey", key);
-				
-				// Handle different data types
+			for (const field of MUTABLE_FIELDS) {
+				const value = (record as Record<string, unknown>)[field];
+				const colName = getColumnName("apikey", field);
+
 				if (value === null || value === undefined) {
 					transformed[colName] = null;
+				} else if (typeof value === "object" && "toISOString" in value) {
+					transformed[colName] = config.supportsDates
+						? value
+						: (value as Date).toISOString();
 				} else if (typeof value === "object") {
-					// Arrays and objects need JSON serialization if DB doesn't support JSON
-					if (config.supportsJSON) {
-						transformed[colName] = value;
-					} else {
-						transformed[colName] = JSON.stringify(value);
-					}
-				} else if (value && typeof value === "object" && "toISOString" in value) {
-					// Date handling
-					if (config.supportsDates) {
-						transformed[colName] = value;
-					} else {
-						transformed[colName] = (value as Date).toISOString();
-					}
+					transformed[colName] = config.supportsJSON
+						? value
+						: JSON.stringify(value);
 				} else if (typeof value === "boolean") {
-					// Boolean handling
-					if (config.supportsBooleans) {
-						transformed[colName] = value;
-					} else {
-						transformed[colName] = value ? 1 : 0;
-					}
+					transformed[colName] = config.supportsBooleans ? value : value ? 1 : 0;
 				} else {
 					transformed[colName] = value;
 				}
 			}
 		} else {
-			// Store as JSONB or stringified JSON
 			transformed[getColumnName("apikey", "id")] = record.id;
 			transformed[getColumnName("apikey", "keyHash")] = record.keyHash;
 
+			const metadata: Record<string, unknown> = {};
+			for (const field of MUTABLE_FIELDS) {
+				const value = (record as Record<string, unknown>)[field];
+				if (value !== undefined) {
+					metadata[field] = value;
+				}
+			}
+
 			if (config.supportsJSON) {
-				transformed[getColumnName("apikey", "metadata")] = record.metadata;
+				transformed[getColumnName("apikey", "metadata")] = metadata;
 			} else {
-				transformed[getColumnName("apikey", "metadata")] = JSON.stringify(record.metadata);
+				transformed[getColumnName("apikey", "metadata")] =
+					JSON.stringify(metadata);
 			}
 		}
 
 		return transformed;
 	};
 
-	// Transform database row back to API key record
-	const transformApiKeyOutput = (row: Record<string, unknown>): ApiKeyRecord => {
+	const transformApiKeyOutput = (
+		row: Record<string, unknown>
+	): ApiKeyRecord => {
 		const id = String(row[getColumnName("apikey", "id")]);
 		const keyHash = String(row[getColumnName("apikey", "keyHash")]);
 
-		let metadata: ApiKeyMetadata;
+		const record: Record<string, unknown> = { id, keyHash };
 
 		if (schema.flattenMetadata) {
-			// Reconstruct metadata from flattened columns
-			metadata = {} as ApiKeyMetadata;
-			const metadataFields = [
-				"ownerId",
-				"name",
-				"description",
-				"scopes",
-				"resources",
-				"rateLimit",
-				"expiresAt",
-				"revokedAt",
-				"lastUsedAt",
-				"createdAt",
-				"tags",
-				"allowedIps",
-				"allowedOrigins",
-			];
-
-			for (const field of metadataFields) {
+			for (const field of MUTABLE_FIELDS) {
 				const colName = getColumnName("apikey", field);
 				const value = row[colName];
 
 				if (value !== undefined && value !== null) {
-					// Handle type conversions
-					if (field === "expiresAt" || field === "revokedAt" || field === "lastUsedAt" || field === "createdAt") {
-						// Date fields
-						if (typeof value === "string" && !config.supportsDates) {
-							(metadata as Record<string, unknown>)[field] = new Date(value);
-						} else {
-							(metadata as Record<string, unknown>)[field] = value;
-						}
-					} else if (field === "scopes" || field === "resources" || field === "tags" || field === "allowedIps" || field === "allowedOrigins") {
-						// Array fields
-						if (typeof value === "string" && !config.supportsJSON) {
-							(metadata as Record<string, unknown>)[field] = JSON.parse(value);
-						} else {
-							(metadata as Record<string, unknown>)[field] = value;
-						}
-					} else if (field === "rateLimit") {
-						// Object field
-						if (typeof value === "string" && !config.supportsJSON) {
-							(metadata as Record<string, unknown>)[field] = JSON.parse(value);
-						} else {
-							(metadata as Record<string, unknown>)[field] = value;
-						}
+					if (
+						(field === "scopes" ||
+							field === "resources" ||
+							field === "tags" ||
+							field === "allowedIps" ||
+							field === "allowedOrigins" ||
+							field === "rateLimit") &&
+						typeof value === "string" &&
+						!config.supportsJSON
+					) {
+						record[field] = JSON.parse(value);
 					} else {
-						(metadata as Record<string, unknown>)[field] = value;
+						record[field] = value;
 					}
 				}
 			}
 		} else {
-			// Parse metadata from JSON column
 			const metadataValue = row[getColumnName("apikey", "metadata")];
-			if (typeof metadataValue === "string") {
-				metadata = JSON.parse(metadataValue);
-			} else {
-				metadata = metadataValue as ApiKeyMetadata;
+			const metadata =
+				typeof metadataValue === "string"
+					? JSON.parse(metadataValue)
+					: (metadataValue as Record<string, unknown>);
+
+			if (metadata) {
+				for (const [key, value] of Object.entries(metadata)) {
+					if (value !== undefined) {
+						record[key] = value;
+					}
+				}
 			}
 		}
 
-		return { id, keyHash, metadata };
+		return record as unknown as ApiKeyRecord;
 	};
 
-	// Transform audit log for database insertion
 	const transformAuditLogInput = (log: AuditLog): Record<string, unknown> => {
 		const transformed: Record<string, unknown> = {};
 
@@ -214,11 +203,8 @@ export const createAdapterFactory = (
 		transformed[getColumnName("auditlog", "keyId")] = log.keyId;
 		transformed[getColumnName("auditlog", "ownerId")] = log.ownerId;
 		transformed[getColumnName("auditlog", "action")] = log.action;
-		
-		// Timestamp handling
 		transformed[getColumnName("auditlog", "timestamp")] = log.timestamp;
 
-		// Store optional data field
 		if (log.data) {
 			const dataCol = getColumnName("auditlog", "data");
 			if (config.supportsJSON) {
@@ -231,7 +217,9 @@ export const createAdapterFactory = (
 		return transformed;
 	};
 
-	const transformAuditLogOutput = (row: Record<string, unknown>): AuditLog => {
+	const transformAuditLogOutput = (
+		row: Record<string, unknown>
+	): AuditLog => {
 		const log: AuditLog = {
 			id: String(row[getColumnName("auditlog", "id")]),
 			keyId: String(row[getColumnName("auditlog", "keyId")]),
@@ -252,7 +240,6 @@ export const createAdapterFactory = (
 		return log;
 	};
 
-	// Create adapter context
 	const context: AdapterContext = {
 		config,
 		schema,
@@ -265,17 +252,16 @@ export const createAdapterFactory = (
 		transformAuditLogOutput,
 	};
 
-	// Get the base adapter implementation
 	const baseAdapter = options.adapter(context);
 
-	// Wrap methods with transformations and logging
 	const wrappedAdapter: Storage = {
 		async save(record: ApiKeyRecord): Promise<void> {
 			debugLog("save", "Input:", record);
 
-			// Generate ID if needed
 			if (!record.id && !config.disableIdGeneration) {
-				record.id = config.customIdGenerator ? config.customIdGenerator() : generateKey();
+				record.id = config.customIdGenerator
+					? config.customIdGenerator()
+					: generateKey();
 			}
 
 			await baseAdapter.save(record);
@@ -303,24 +289,33 @@ export const createAdapterFactory = (
 			return result;
 		},
 
-		async findByTags(tags: string[], ownerId?: string): Promise<ApiKeyRecord[]> {
+		async findByTags(
+			tags: string[],
+			ownerId?: string
+		): Promise<ApiKeyRecord[]> {
 			debugLog("findByTags", "Tags:", tags, "Owner ID:", ownerId);
 			const result = await baseAdapter.findByTags(tags, ownerId);
 			debugLog("findByTags", "Found:", result.length, "keys");
 			return result;
 		},
 
-		async findByTag(tag: string, ownerId?: string): Promise<ApiKeyRecord[]> {
+		async findByTag(
+			tag: string,
+			ownerId?: string
+		): Promise<ApiKeyRecord[]> {
 			debugLog("findByTag", "Tag:", tag, "Owner ID:", ownerId);
 			const result = await baseAdapter.findByTag(tag, ownerId);
 			debugLog("findByTag", "Found:", result.length, "keys");
 			return result;
 		},
 
-		async updateMetadata(id: string, metadata: Partial<ApiKeyMetadata>): Promise<void> {
-			debugLog("updateMetadata", "ID:", id, "Metadata:", metadata);
-			await baseAdapter.updateMetadata(id, metadata);
-			debugLog("updateMetadata", "Updated successfully");
+		async update(
+			id: string,
+			fields: Partial<ApiKeyMutableFields>
+		): Promise<void> {
+			debugLog("update", "ID:", id, "Fields:", fields);
+			await baseAdapter.update(id, fields);
+			debugLog("update", "Updated successfully");
 		},
 
 		async delete(id: string): Promise<void> {
@@ -335,7 +330,6 @@ export const createAdapterFactory = (
 			debugLog("deleteByOwner", "Deleted successfully");
 		},
 
-		// Optional audit log methods
 		...(baseAdapter.saveLog && {
 			async saveLog(log: AuditLog): Promise<void> {
 				debugLog("saveLog", "Log:", log);
@@ -383,4 +377,3 @@ export const createAdapterFactory = (
 
 	return wrappedAdapter;
 };
-

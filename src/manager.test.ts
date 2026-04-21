@@ -39,7 +39,6 @@ describe("ApiKeyManager", () => {
 			const hash = keys.hashKey(key);
 
 			expect(hash).toBeDefined();
-			// biome-ignore lint/style/noMagicNumbers: 64 characters default
 			expect(hash.length).toBe(64);
 		});
 
@@ -49,7 +48,6 @@ describe("ApiKeyManager", () => {
 			const key = "test-key-123";
 			const hash = manager512.hashKey(key);
 
-			// biome-ignore lint/style/noMagicNumbers: 128 characters default
 			expect(hash.length).toBe(128);
 		});
 	});
@@ -80,7 +78,7 @@ describe("ApiKeyManager", () => {
 			const result = await keys.verify(key);
 			expect(result.valid).toBe(true);
 			expect(result.record).toBeDefined();
-			expect(result.record?.metadata.ownerId).toBe("user_123");
+			expect(result.record?.ownerId).toBe("user_123");
 		});
 
 		it("should verify with Bearer token", async () => {
@@ -112,7 +110,7 @@ describe("ApiKeyManager", () => {
 	});
 
 	describe("creating keys", () => {
-		it("should create a key with metadata", async () => {
+		it("should create a key with fields", async () => {
 			const { key, record } = await keys.create({
 				ownerId: "user_123",
 				name: "Test Key",
@@ -122,9 +120,9 @@ describe("ApiKeyManager", () => {
 			expect(key).toMatch(SK_TEST_PREFIX_REGEX);
 			expect(record.id).toBeDefined();
 			expect(record.keyHash).toBeDefined();
-			expect(record.metadata.ownerId).toBe("user_123");
-			expect(record.metadata.name).toBe("Test Key");
-			expect(record.metadata.description).toBe("A test API key");
+			expect(record.ownerId).toBe("user_123");
+			expect(record.name).toBe("Test Key");
+			expect(record.description).toBe("A test API key");
 		});
 
 		it("should create a key with scopes", async () => {
@@ -133,7 +131,7 @@ describe("ApiKeyManager", () => {
 				scopes: ["read", "write"],
 			});
 
-			expect(record.metadata.scopes).toEqual(["read", "write"]);
+			expect(record.scopes).toEqual(["read", "write"]);
 		});
 
 		it("should create a key with expiration", async () => {
@@ -144,7 +142,7 @@ describe("ApiKeyManager", () => {
 				expiresAt: expiresAt.toISOString(),
 			});
 
-			expect(record.metadata.expiresAt).toBe(expiresAt.toISOString());
+			expect(record.expiresAt).toBe(expiresAt.toISOString());
 		});
 
 		it("should automatically set createdAt timestamp", async () => {
@@ -152,8 +150,8 @@ describe("ApiKeyManager", () => {
 				ownerId: "user_123",
 			});
 
-			expect(record.metadata.createdAt).toBeDefined();
-			expect(record.metadata.createdAt).toMatch(ISO_DATE_REGEX);
+			expect(record.createdAt).toBeDefined();
+			expect(record.createdAt).toMatch(ISO_DATE_REGEX);
 		});
 	});
 
@@ -182,7 +180,7 @@ describe("ApiKeyManager", () => {
 
 			const found = await keys.findById(record.id);
 			expect(found).not.toBeNull();
-			expect(found?.metadata.revokedAt).toBeDefined();
+			expect(found?.revokedAt).toBeDefined();
 		});
 
 		it("should revoke all keys for an owner", async () => {
@@ -193,8 +191,8 @@ describe("ApiKeyManager", () => {
 
 			const keyList = await keys.list("user_123");
 			expect(keyList.length).toBe(2);
-			expect(keyList[0]?.metadata.revokedAt).toBeDefined();
-			expect(keyList[1]?.metadata.revokedAt).toBeDefined();
+			expect(keyList[0]?.revokedAt).toBeDefined();
+			expect(keyList[1]?.revokedAt).toBeDefined();
 
 			const result1 = await keys.verify(key1);
 			const result2 = await keys.verify(key2);
@@ -205,23 +203,20 @@ describe("ApiKeyManager", () => {
 
 	describe("end-to-end workflow", () => {
 		it("should create, verify, and revoke a key", async () => {
-			// Create
 			const { key, record } = await keys.create({
 				ownerId: "user_123",
 				name: "Production Key",
 			});
 			expect(key.startsWith("sk_test_")).toBe(true);
 
-			// Verify
 			const result = await keys.verify(key);
 			expect(result.valid).toBe(true);
 			expect(result.record?.id).toBe(record.id);
 
-			// Revoke
 			await keys.revoke(record.id);
 			const afterRevoke = await keys.findById(record.id);
 			expect(afterRevoke).not.toBeNull();
-			expect(afterRevoke?.metadata.revokedAt).toBeDefined();
+			expect(afterRevoke?.revokedAt).toBeDefined();
 		});
 
 		it("should handle multiple keys for the same owner", async () => {
@@ -303,7 +298,6 @@ describe("ApiKeyManager - Key Extraction", () => {
 
 describe("ApiKeyManager - Config-based Header Extraction", () => {
 	it("should support custom headers and config options", async () => {
-		// Custom header names
 		const keys1 = createKeys({
 			prefix: "sk_",
 			headerNames: ["x-custom-auth"],
@@ -313,15 +307,16 @@ describe("ApiKeyManager - Config-based Header Extraction", () => {
 			(await keys1.verify(new Headers({ "x-custom-auth": key }))).valid
 		).toBe(true);
 
-		// ExtractBearer option
 		const keys2 = createKeys({ prefix: "sk_", extractBearer: false });
 		const { key: key2 } = await keys2.create({ ownerId: "user_1" });
 		expect(
 			(await keys2.verify(new Headers({ authorization: key2 }))).valid
 		).toBe(true);
 
-		// Override headers per request
-		const keys3 = createKeys({ prefix: "sk_", headerNames: ["authorization"] });
+		const keys3 = createKeys({
+			prefix: "sk_",
+			headerNames: ["authorization"],
+		});
 		const { key: key3 } = await keys3.create({ ownerId: "user_1" });
 		expect(
 			(
@@ -331,14 +326,13 @@ describe("ApiKeyManager - Config-based Header Extraction", () => {
 			).valid
 		).toBe(true);
 
-		// Helper methods respect config
 		const keys4 = createKeys({ prefix: "sk_", headerNames: ["x-api-key"] });
 		expect(keys4.hasKey(new Headers({ "x-api-key": "sk_test_123" }))).toBe(
 			true
 		);
-		expect(keys4.extractKey(new Headers({ "x-api-key": "sk_test_123" }))).toBe(
-			"sk_test_123"
-		);
+		expect(
+			keys4.extractKey(new Headers({ "x-api-key": "sk_test_123" }))
+		).toBe("sk_test_123");
 	});
 });
 
@@ -562,16 +556,14 @@ describe("ApiKeyManager - Additional Operations", () => {
 
 			expect(newKey).toBeDefined();
 			expect(newKey).not.toBe(oldKey);
-			expect(newRecord.metadata.name).toBe("New Key");
-			expect(newRecord.metadata.scopes).toEqual(["read", "write"]);
+			expect(newRecord.name).toBe("New Key");
+			expect(newRecord.scopes).toEqual(["read", "write"]);
 			expect(rotatedOldRecord.id).toBe(oldRecord.id);
 
-			// Old key should be revoked
 			const oldResult = await keys.verify(oldKey);
 			expect(oldResult.valid).toBe(false);
 			expect(oldResult.error).toBe("API key has been revoked");
 
-			// New key should work
 			const newResult = await keys.verify(newKey);
 			expect(newResult.valid).toBe(true);
 		});
@@ -597,7 +589,7 @@ describe("ApiKeyManager - Additional Operations", () => {
 
 			expect(result1.valid).toBe(false);
 			expect(result2.valid).toBe(false);
-			expect(result3.valid).toBe(true); // user_2 keys should still work
+			expect(result3.valid).toBe(true);
 		});
 	});
 
@@ -608,7 +600,7 @@ describe("ApiKeyManager - Additional Operations", () => {
 
 			const record = await keys.verifyFromHeaders(headers);
 			expect(record).toBeDefined();
-			expect(record?.metadata.ownerId).toBe("user_1");
+			expect(record?.ownerId).toBe("user_1");
 		});
 
 		it("should return null when invalid", async () => {
@@ -654,7 +646,6 @@ describe("ApiKeyManager - Additional Operations", () => {
 			expect(keys.checkResourceScope(record, "website", "site1", "read")).toBe(
 				true
 			);
-			// site3 is not in resources, so it falls back to global scopes (read is present)
 			expect(keys.checkResourceScope(record, "website", "site3", "read")).toBe(
 				true
 			);
@@ -676,7 +667,6 @@ describe("ApiKeyManager - Additional Operations", () => {
 					"admin",
 				])
 			).toBe(true);
-			// site2 is not in resources, so it falls back to global scopes (read is present)
 			expect(
 				keys.checkResourceAnyScope(record, "website", "site2", ["read"])
 			).toBe(true);
@@ -723,10 +713,9 @@ describe("ApiKeyManager - Additional Operations", () => {
 
 	describe("error handling", () => {
 		it("should handle updateLastUsed errors gracefully", async () => {
-			// Create a mock storage that throws on updateMetadata
 			const errorStorage = new MemoryStore();
 
-			errorStorage.updateMetadata = () => {
+			errorStorage.update = () => {
 				throw new Error("Database error");
 			};
 
@@ -736,9 +725,10 @@ describe("ApiKeyManager - Additional Operations", () => {
 				autoTrackUsage: true,
 			});
 
-			const { key } = await keysWithErrorStorage.create({ ownerId: "user_1" });
+			const { key } = await keysWithErrorStorage.create({
+				ownerId: "user_1",
+			});
 
-			// This should not throw, errors should be caught
 			const result = await keysWithErrorStorage.verify(key);
 			expect(result.valid).toBe(true);
 		});
@@ -755,7 +745,9 @@ describe("ApiKeyManager - Additional Operations", () => {
 				cache: errorCache,
 			});
 
-			const { record } = await keysWithErrorCache.create({ ownerId: "user_1" });
+			const { record } = await keysWithErrorCache.create({
+				ownerId: "user_1",
+			});
 
 			await expect(
 				keysWithErrorCache.invalidateCache(record.keyHash)
@@ -805,7 +797,6 @@ describe("ApiKeyManager - Additional Operations", () => {
 			const { key } = await keysWithCache.create({ ownerId: "user_1" });
 			const keyHash = keysWithCache.hashKey(key);
 
-			// Simulate cache corruption with invalid JSON
 			await cache.set(`apikey:${keyHash}`, "invalid json", 60);
 
 			const result = await keysWithCache.verify(key);
@@ -814,7 +805,9 @@ describe("ApiKeyManager - Additional Operations", () => {
 
 		it("should handle cache del errors gracefully during operations", async () => {
 			const errorCache = new MemoryCache();
-			errorCache.del = vi.fn().mockRejectedValue(new Error("Cache del failed"));
+			errorCache.del = vi
+				.fn()
+				.mockRejectedValue(new Error("Cache del failed"));
 
 			const keysWithErrorCache = createKeys({
 				prefix: "sk_",
@@ -826,7 +819,6 @@ describe("ApiKeyManager - Additional Operations", () => {
 			});
 			await keysWithErrorCache.verify(key);
 
-			// All operations should succeed even if cache fails
 			await keysWithErrorCache.disable(record.id);
 			await keysWithErrorCache.enable(record.id);
 			await keysWithErrorCache.disable(record.id);
@@ -840,7 +832,6 @@ describe("ApiKeyManager - Additional Operations", () => {
 			const cache = new MemoryCache();
 			const keysWithCache = createKeys({ prefix: "sk_", cache });
 
-			// Expired key
 			const pastDate = new Date();
 			pastDate.setFullYear(pastDate.getFullYear() - 1);
 			const { key: expiredKey, record: expiredRecord } =
@@ -857,7 +848,6 @@ describe("ApiKeyManager - Additional Operations", () => {
 			expect((await keysWithCache.verify(expiredKey)).valid).toBe(false);
 			expect(await cache.get(`apikey:${expiredHash}`)).toBeNull();
 
-			// Revoked key
 			const { key: revokedKey, record: revokedRecord } =
 				await keysWithCache.create({ ownerId: "user_1" });
 			const revokedHash = keysWithCache.hashKey(revokedKey);
@@ -865,7 +855,6 @@ describe("ApiKeyManager - Additional Operations", () => {
 			await keysWithCache.revoke(revokedRecord.id);
 			expect(await cache.get(`apikey:${revokedHash}`)).toBeNull();
 
-			// Disabled key
 			const { key: disabledKey, record: disabledRecord } =
 				await keysWithCache.create({ ownerId: "user_1" });
 			const disabledHash = keysWithCache.hashKey(disabledKey);
@@ -924,7 +913,6 @@ describe("ApiKeyManager - Audit Logging", () => {
 		});
 
 		it("should log all key operations with context", async () => {
-			// Create with context
 			const { record } = await keys.create(
 				{ ownerId: "user_1", name: "Test Key", scopes: ["read"] },
 				{
@@ -937,7 +925,6 @@ describe("ApiKeyManager - Audit Logging", () => {
 			expect(logs[0]?.action).toBe("created");
 			expect(logs[0]?.data?.userId).toBe("admin_123");
 
-			// Disable
 			await keys.disable(record.id, { userId: "admin_111" });
 			const disabledLogs = await keys.getLogs({
 				keyId: record.id,
@@ -945,7 +932,6 @@ describe("ApiKeyManager - Audit Logging", () => {
 			});
 			expect(disabledLogs[0]?.action).toBe("disabled");
 
-			// Enable
 			await keys.enable(record.id, { userId: "admin_789" });
 			const enabledLogs = await keys.getLogs({
 				keyId: record.id,
@@ -953,7 +939,6 @@ describe("ApiKeyManager - Audit Logging", () => {
 			});
 			expect(enabledLogs[0]?.action).toBe("enabled");
 
-			// Rotate
 			const rotateResult = await keys.rotate(record.id, undefined, {
 				userId: "admin_222",
 				metadata: { reason: "Scheduled rotation" },
@@ -965,7 +950,6 @@ describe("ApiKeyManager - Audit Logging", () => {
 			expect(rotatedLogs[0]?.action).toBe("rotated");
 			expect(rotatedLogs[0]?.data?.metadata).toHaveProperty("rotatedTo");
 
-			// Revoke the new rotated key
 			await keys.revoke(rotateResult.record.id, {
 				userId: "admin_456",
 				metadata: { reason: "Security breach" },
@@ -1120,7 +1104,10 @@ describe("ApiKeyManager - Audit Logging", () => {
 			await keys.create({ ownerId: "user_1" });
 
 			const allLogs = await keys.getLogs({ ownerId: "user_1" });
-			const offsetLogs = await keys.getLogs({ ownerId: "user_1", offset: 1 });
+			const offsetLogs = await keys.getLogs({
+				ownerId: "user_1",
+				offset: 1,
+			});
 
 			expect(offsetLogs.length).toBe(2);
 			expect(offsetLogs[0]?.id).toBe(allLogs[1]?.id);
@@ -1129,14 +1116,13 @@ describe("ApiKeyManager - Audit Logging", () => {
 		it("should return logs sorted by timestamp descending", async () => {
 			const { record } = await keys.create({ ownerId: "user_1" });
 
-			// Small delay to ensure different timestamps
 			await new Promise((resolve) => setTimeout(resolve, 10));
 			await keys.revoke(record.id);
 
 			const logs = await keys.getLogs({ keyId: record.id });
 			expect(logs.length).toBe(2);
-			expect(logs[0]?.action).toBe("revoked"); // Most recent
-			expect(logs[1]?.action).toBe("created"); // Oldest
+			expect(logs[0]?.action).toBe("revoked");
+			expect(logs[1]?.action).toBe("created");
 		});
 	});
 
@@ -1225,7 +1211,7 @@ describe("ApiKeyManager - Audit Logging", () => {
 				endDate: yesterday.toISOString(),
 			});
 
-			expect(deleted).toBe(0); // No logs before yesterday
+			expect(deleted).toBe(0);
 		});
 
 		it("should return count of deleted logs", async () => {

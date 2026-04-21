@@ -1,5 +1,5 @@
 import { sql, type Kysely } from "kysely";
-import type { ApiKeyMetadata, ApiKeyRecord } from "../types/api-key-types";
+import type { ApiKeyMutableFields, ApiKeyRecord } from "../types/api-key-types";
 import type {
 	AuditLog,
 	AuditLogQuery,
@@ -226,7 +226,7 @@ export function createKyselyStore(options: KyselyAdapterConfig): Storage {
 					const results = await db.selectFrom(table).selectAll().execute();
 					return results
 						.map(transformApiKeyOutput)
-						.filter((record) => record.metadata.ownerId === ownerId);
+						.filter((record) => record.ownerId === ownerId);
 				},
 
 				async findByTags(
@@ -251,7 +251,7 @@ export function createKyselyStore(options: KyselyAdapterConfig): Storage {
 						return results
 							.map(transformApiKeyOutput)
 							.filter((record) => {
-								const recordTags = record.metadata.tags || [];
+								const recordTags = record.tags || [];
 								return lowercasedTags.some((tag) => recordTags.includes(tag));
 							});
 					}
@@ -282,12 +282,12 @@ export function createKyselyStore(options: KyselyAdapterConfig): Storage {
 					return results
 						.map(transformApiKeyOutput)
 						.filter((record) => {
-							const recordTags = record.metadata.tags || [];
+							const recordTags = record.tags || [];
 							const hasTag = lowercasedTags.some((tag) =>
 								recordTags.includes(tag)
 							);
 							const matchesOwner =
-								ownerId === undefined || record.metadata.ownerId === ownerId;
+								ownerId === undefined || record.ownerId === ownerId;
 							return hasTag && matchesOwner;
 						});
 				},
@@ -296,23 +296,22 @@ export function createKyselyStore(options: KyselyAdapterConfig): Storage {
 					return this.findByTags([tag], ownerId);
 				},
 
-				async updateMetadata(
+				async update(
 					id: string,
-					metadata: Partial<ApiKeyMetadata>
+					fields: Partial<ApiKeyMutableFields>
 				): Promise<void> {
 					const existing = await this.findById(id);
 					if (!existing) {
 						throw new Error(`API key with id ${id} not found`);
 					}
 
-					const updated = { ...existing.metadata, ...metadata };
-					const updatedRecord = { ...existing, metadata: updated };
-					const row = transformApiKeyInput(updatedRecord);
+					const updated = { ...existing, ...fields };
+					const row = transformApiKeyInput(updated);
 					const idCol = context.getColumnName("apikey", "id");
 
 					if (context.schema.flattenMetadata) {
 						const updates: Record<string, unknown> = {};
-						for (const [key] of Object.entries(metadata)) {
+						for (const key of Object.keys(fields)) {
 							const colName = context.getColumnName("apikey", key);
 							updates[colName] = (row as Record<string, unknown>)[colName];
 						}
@@ -323,9 +322,21 @@ export function createKyselyStore(options: KyselyAdapterConfig): Storage {
 							.execute();
 					} else {
 						const metadataCol = context.getColumnName("apikey", "metadata");
+						const metadata: Record<string, unknown> = {};
+						const mutableFields = [
+							"ownerId", "name", "description", "scopes", "resources",
+							"expiresAt", "revokedAt", "lastUsedAt", "createdAt",
+							"tags", "enabled", "rotatedTo",
+						];
+						for (const f of mutableFields) {
+							const val = (updated as Record<string, unknown>)[f];
+							if (val !== undefined) {
+								metadata[f] = val;
+							}
+						}
 						await db
 							.updateTable(table)
-							.set({ [metadataCol]: updated })
+							.set({ [metadataCol]: metadata })
 							.where(idCol, "=", id)
 							.execute();
 					}
@@ -494,7 +505,7 @@ export class KyselyStore implements Storage {
 	findByOwner = (ownerId: string) => this.storage.findByOwner(ownerId);
 	findByTags = (tags: string[], ownerId?: string) => this.storage.findByTags(tags, ownerId);
 	findByTag = (tag: string, ownerId?: string) => this.storage.findByTag(tag, ownerId);
-	updateMetadata = (id: string, metadata: Partial<ApiKeyMetadata>) => this.storage.updateMetadata(id, metadata);
+	update = (id: string, fields: Partial<ApiKeyMutableFields>) => this.storage.update(id, fields);
 	delete = (id: string) => this.storage.delete(id);
 	deleteByOwner = (ownerId: string) => this.storage.deleteByOwner(ownerId);
 	saveLog = (log: AuditLog) => this.storage.saveLog?.(log) ?? Promise.resolve();

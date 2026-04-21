@@ -37,7 +37,7 @@ export type AdapterFactoryConfig = {
 		findById?: boolean;
 		findByOwner?: boolean;
 		findByTags?: boolean;
-		updateMetadata?: boolean;
+		update?: boolean;
 		delete?: boolean;
 		deleteByOwner?: boolean;
 		saveLog?: boolean;

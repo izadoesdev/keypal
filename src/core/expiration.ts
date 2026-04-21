@@ -1,12 +1,16 @@
-export function isExpired(expiresAt: string | null | undefined): boolean {
+export function isExpired(
+	expiresAt: Date | string | null | undefined
+): boolean {
 	if (!expiresAt) {
 		return false;
 	}
-	return new Date(expiresAt) <= new Date();
+	const date = expiresAt instanceof Date ? expiresAt : new Date(expiresAt);
+	return date <= new Date();
 }
 
 export function getExpirationTime(
-	expiresAt: string | null | undefined
+	expiresAt: Date | string | null | undefined
 ): Date | null {
-	return expiresAt ? new Date(expiresAt) : null;
+	if (!expiresAt) return null;
+	return expiresAt instanceof Date ? expiresAt : new Date(expiresAt);
 }

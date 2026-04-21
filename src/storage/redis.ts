@@ -1,6 +1,6 @@
 import type Redis from "ioredis";
 import type { ChainableCommander } from "ioredis";
-import type { ApiKeyMetadata, ApiKeyRecord } from "../types/api-key-types";
+import type { ApiKeyMutableFields, ApiKeyRecord } from "../types/api-key-types";
 import type {
 	AuditLog,
 	AuditLogQuery,
@@ -15,8 +15,7 @@ function isValidApiKeyRecord(data: unknown): data is ApiKeyRecord {
 	return (
 		typeof record.id === "string" &&
 		typeof record.keyHash === "string" &&
-		typeof record.metadata === "object" &&
-		record.metadata !== null
+		typeof record.ownerId === "string"
 	);
 }
 
@@ -79,7 +78,6 @@ export class RedisStore implements Storage {
 		this.prefix = options.prefix ?? "apikey:";
 	}
 
-	// Key helpers
 	private key(id: string): string {
 		return `${this.prefix}${id}`;
 	}
@@ -96,7 +94,6 @@ export class RedisStore implements Storage {
 		return `${this.prefix}owner:${ownerId}`;
 	}
 
-	// Audit log key helpers
 	private logKey(id: string): string {
 		return `${this.prefix}log:${id}`;
 	}
@@ -117,7 +114,6 @@ export class RedisStore implements Storage {
 		return `${this.prefix}logs:all`;
 	}
 
-	// API Key methods
 	async save(record: ApiKeyRecord): Promise<void> {
 		if (await this.findById(record.id)) {
 			throw new Error(`API key with id ${record.id} already exists`);
@@ -126,10 +122,10 @@ export class RedisStore implements Storage {
 		const pipeline = this.redis.pipeline();
 		pipeline.set(this.key(record.id), JSON.stringify(record));
 		pipeline.set(this.hashKey(record.keyHash), record.id);
-		pipeline.sadd(this.ownerKey(record.metadata.ownerId), record.id);
+		pipeline.sadd(this.ownerKey(record.ownerId), record.id);
 
-		if (record.metadata.tags?.length) {
-			for (const tag of record.metadata.tags) {
+		if (record.tags?.length) {
+			for (const tag of record.tags) {
 				pipeline.sadd(this.tagKey(tag.toLowerCase()), record.id);
 			}
 		}
@@ -203,25 +199,25 @@ export class RedisStore implements Storage {
 		return this.findByTags([tag], ownerId);
 	}
 
-	async updateMetadata(
+	async update(
 		id: string,
-		metadata: Partial<ApiKeyMetadata>
+		fields: Partial<ApiKeyMutableFields>
 	): Promise<void> {
 		const record = await this.findById(id);
 		if (!record) throw new Error(`API key with id ${id} not found`);
 
-		const oldTags = record.metadata.tags ?? [];
-		record.metadata = { ...record.metadata, ...metadata };
-		const newTags = record.metadata.tags ?? [];
+		const oldTags = record.tags ?? [];
+		Object.assign(record, fields);
+		const newTags = record.tags ?? [];
 
 		const pipeline = this.redis.pipeline();
 		pipeline.set(this.key(id), JSON.stringify(record));
 
-		if (metadata.revokedAt) {
+		if (fields.revokedAt) {
 			pipeline.del(this.hashKey(record.keyHash));
 		}
 
-		if (metadata.tags !== undefined) {
+		if (fields.tags !== undefined) {
 			const oldTagsSet = new Set(oldTags.map((t) => t.toLowerCase()));
 			const newTagsSet = new Set(newTags.map((t) => t.toLowerCase()));
 
@@ -233,7 +229,7 @@ export class RedisStore implements Storage {
 			}
 		}
 
-		await execPipeline(pipeline, "updateMetadata");
+		await execPipeline(pipeline, "update");
 	}
 
 	async delete(id: string): Promise<void> {
@@ -243,10 +239,10 @@ export class RedisStore implements Storage {
 		const pipeline = this.redis.pipeline();
 		pipeline.del(this.key(id));
 		pipeline.del(this.hashKey(record.keyHash));
-		pipeline.srem(this.ownerKey(record.metadata.ownerId), id);
+		pipeline.srem(this.ownerKey(record.ownerId), id);
 
-		if (record.metadata.tags?.length) {
-			for (const tag of record.metadata.tags) {
+		if (record.tags?.length) {
+			for (const tag of record.tags) {
 				pipeline.srem(this.tagKey(tag.toLowerCase()), id);
 			}
 		}
@@ -276,8 +272,8 @@ export class RedisStore implements Storage {
 				const record = parseRecord(result[1] as string);
 				if (record) {
 					deletePipeline.del(this.hashKey(record.keyHash));
-					if (record.metadata.tags?.length) {
-						for (const tag of record.metadata.tags) {
+					if (record.tags?.length) {
+						for (const tag of record.tags) {
 							deletePipeline.srem(this.tagKey(tag.toLowerCase()), id);
 						}
 					}
@@ -298,15 +294,11 @@ export class RedisStore implements Storage {
 		await execPipeline(pipeline, "setTtl");
 	}
 
-	// Audit Log methods
 	async saveLog(log: AuditLog): Promise<void> {
 		const score = new Date(log.timestamp).getTime();
 		const pipeline = this.redis.pipeline();
 
-		// Store the log data
 		pipeline.set(this.logKey(log.id), JSON.stringify(log));
-
-		// Add to sorted sets for querying (score = timestamp for ordering)
 		pipeline.zadd(this.allLogsIndex(), score, log.id);
 		pipeline.zadd(this.logsByKeyIndex(log.keyId), score, log.id);
 		pipeline.zadd(this.logsByOwnerIndex(log.ownerId), score, log.id);
@@ -319,7 +311,6 @@ export class RedisStore implements Storage {
 		const offset = query.offset ?? 0;
 		const limit = query.limit ?? DEFAULT_QUERY_LIMIT;
 
-		// Determine which index to use based on query
 		let indexKey: string;
 		if (query.keyId) {
 			indexKey = this.logsByKeyIndex(query.keyId);
@@ -331,9 +322,12 @@ export class RedisStore implements Storage {
 			indexKey = this.allLogsIndex();
 		}
 
-		// Get log IDs from sorted set (newest first)
-		const minScore = query.startDate ? new Date(query.startDate).getTime() : "-inf";
-		const maxScore = query.endDate ? new Date(query.endDate).getTime() : "+inf";
+		const minScore = query.startDate
+			? new Date(query.startDate).getTime()
+			: "-inf";
+		const maxScore = query.endDate
+			? new Date(query.endDate).getTime()
+			: "+inf";
 
 		const logIds = await this.redis.zrevrangebyscore(
 			indexKey,
@@ -346,14 +340,12 @@ export class RedisStore implements Storage {
 
 		if (!logIds.length) return [];
 
-		// Fetch all log data
 		const pipeline = this.redis.pipeline();
 		for (const id of logIds) {
 			pipeline.get(this.logKey(id));
 		}
 		const results = await execPipeline(pipeline, "findLogs");
 
-		// Parse and filter logs
 		const logs: AuditLog[] = [];
 		for (const result of results) {
 			if (result[1]) {
@@ -368,8 +360,6 @@ export class RedisStore implements Storage {
 	}
 
 	async countLogs(query: AuditLogQuery): Promise<number> {
-		// For accurate count with all filters, we need to fetch and filter
-		// This could be optimized with Redis Lua scripts if needed
 		let indexKey: string;
 		if (query.keyId) {
 			indexKey = this.logsByKeyIndex(query.keyId);
@@ -381,10 +371,13 @@ export class RedisStore implements Storage {
 			indexKey = this.allLogsIndex();
 		}
 
-		const minScore = query.startDate ? new Date(query.startDate).getTime() : "-inf";
-		const maxScore = query.endDate ? new Date(query.endDate).getTime() : "+inf";
+		const minScore = query.startDate
+			? new Date(query.startDate).getTime()
+			: "-inf";
+		const maxScore = query.endDate
+			? new Date(query.endDate).getTime()
+			: "+inf";
 
-		// If only using one filter (the index), we can use zcount
 		const hasMultipleFilters =
 			[query.keyId, query.ownerId, query.action].filter(Boolean).length > 1;
 
@@ -392,19 +385,24 @@ export class RedisStore implements Storage {
 			return this.redis.zcount(indexKey, minScore, maxScore);
 		}
 
-		// Otherwise fetch and filter
-		const logs = await this.findLogs({ ...query, limit: Number.MAX_SAFE_INTEGER, offset: 0 });
+		const logs = await this.findLogs({
+			...query,
+			limit: Number.MAX_SAFE_INTEGER,
+			offset: 0,
+		});
 		return logs.length;
 	}
 
 	async deleteLogs(query: AuditLogQuery): Promise<number> {
-		// Find matching logs first
-		const logs = await this.findLogs({ ...query, limit: Number.MAX_SAFE_INTEGER, offset: 0 });
+		const logs = await this.findLogs({
+			...query,
+			limit: Number.MAX_SAFE_INTEGER,
+			offset: 0,
+		});
 		if (!logs.length) return 0;
 
 		const pipeline = this.redis.pipeline();
 		for (const log of logs) {
-			// Remove from all indices
 			pipeline.del(this.logKey(log.id));
 			pipeline.zrem(this.allLogsIndex(), log.id);
 			pipeline.zrem(this.logsByKeyIndex(log.keyId), log.id);
@@ -417,13 +415,13 @@ export class RedisStore implements Storage {
 	}
 
 	async getLogStats(ownerId: string): Promise<AuditLogStats> {
-		const logs = await this.findLogs({ ownerId, limit: Number.MAX_SAFE_INTEGER });
+		const logs = await this.findLogs({
+			ownerId,
+			limit: Number.MAX_SAFE_INTEGER,
+		});
 		return calculateLogStats(logs);
 	}
 
-	/**
-	 * Check if a log matches all query criteria
-	 */
 	private matchesQuery(log: AuditLog, query: AuditLogQuery): boolean {
 		if (query.keyId && log.keyId !== query.keyId) return false;
 		if (query.ownerId && log.ownerId !== query.ownerId) return false;

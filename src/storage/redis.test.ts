@@ -65,7 +65,7 @@ describe("RedisStore", () => {
 			expect(found).not.toBeNull();
 			expect(found?.id).toBe(record.id);
 			expect(found?.keyHash).toBe(record.keyHash);
-			expect(found?.metadata.ownerId).toBe("user_123");
+			expect(found?.ownerId).toBe("user_123");
 
 			// Verify we can verify the key
 			const verifyResult = await keys.verify(key);
@@ -80,9 +80,7 @@ describe("RedisStore", () => {
 			const record2: ApiKeyRecord = {
 				id: record1.id,
 				keyHash: keys.hashKey(keys.generateKey()),
-				metadata: {
-					ownerId: "user_456",
-				},
+				ownerId: "user_456",
 			};
 
 			await expect(store.save(record2)).rejects.toThrow(
@@ -91,7 +89,7 @@ describe("RedisStore", () => {
 
 			// Original record should remain unchanged
 			const found = await store.findById(record1.id);
-			expect(found?.metadata.ownerId).toBe("user_123");
+			expect(found?.ownerId).toBe("user_123");
 		});
 	});
 
@@ -105,8 +103,8 @@ describe("RedisStore", () => {
 			const found = await store.findByHash(record.keyHash);
 			expect(found).not.toBeNull();
 			expect(found?.keyHash).toBe(record.keyHash);
-			expect(found?.metadata.ownerId).toBe("user_456");
-			expect(found?.metadata.name).toBe("Found Key");
+			expect(found?.ownerId).toBe("user_456");
+			expect(found?.name).toBe("Found Key");
 		});
 
 		it("should return null for non-existent hash", async () => {
@@ -125,7 +123,7 @@ describe("RedisStore", () => {
 			const found = await store.findById(record.id);
 			expect(found).not.toBeNull();
 			expect(found?.id).toBe(record.id);
-			expect(found?.metadata.name).toBe("By ID Key");
+			expect(found?.name).toBe("By ID Key");
 		});
 
 		it("should return null for non-existent ID", async () => {
@@ -155,8 +153,8 @@ describe("RedisStore", () => {
 
 			const found = await store.findByOwner(ownerId);
 			expect(found).toHaveLength(2);
-			expect(found.some((r) => r.metadata.scopes?.includes("read"))).toBe(true);
-			expect(found.some((r) => r.metadata.scopes?.includes("write"))).toBe(
+			expect(found.some((r) => r.scopes?.includes("read"))).toBe(true);
+			expect(found.some((r) => r.scopes?.includes("write"))).toBe(
 				true
 			);
 		});
@@ -230,7 +228,7 @@ describe("RedisStore", () => {
 		});
 	});
 
-	describe("updateMetadata", () => {
+	describe("update", () => {
 		it("should update metadata for a record", async () => {
 			const { record } = await keys.create({
 				ownerId: "user_update",
@@ -238,14 +236,14 @@ describe("RedisStore", () => {
 				scopes: ["read"],
 			});
 
-			await store.updateMetadata(record.id, {
+			await store.update(record.id, {
 				name: "Updated Name",
 				scopes: ["admin", "write"],
 			});
 
 			const updated = await store.findById(record.id);
-			expect(updated?.metadata.name).toBe("Updated Name");
-			expect(updated?.metadata.scopes).toEqual(["admin", "write"]);
+			expect(updated?.name).toBe("Updated Name");
+			expect(updated?.scopes).toEqual(["admin", "write"]);
 		});
 
 		it("should merge updates with existing metadata", async () => {
@@ -255,19 +253,19 @@ describe("RedisStore", () => {
 				scopes: ["read"],
 			});
 
-			await store.updateMetadata(record.id, {
+			await store.update(record.id, {
 				description: "New description",
 			});
 
 			const updated = await store.findById(record.id);
-			expect(updated?.metadata.description).toBe("New description");
-			expect(updated?.metadata.name).toBe("Original Name");
-			expect(updated?.metadata.scopes).toEqual(["read"]);
+			expect(updated?.description).toBe("New description");
+			expect(updated?.name).toBe("Original Name");
+			expect(updated?.scopes).toEqual(["read"]);
 		});
 
 		it("should throw error for non-existent ID", async () => {
 			await expect(
-				store.updateMetadata("non-existent", { name: "New Name" })
+				store.update("non-existent", { name: "New Name" })
 			).rejects.toThrow("API key with id non-existent not found");
 		});
 
@@ -277,7 +275,7 @@ describe("RedisStore", () => {
 				tags: ["tag1"],
 			});
 
-			await store.updateMetadata(record.id, {
+			await store.update(record.id, {
 				tags: ["tag1", "tag2", "tag3"],
 			});
 
@@ -297,7 +295,7 @@ describe("RedisStore", () => {
 				tags: ["tag1", "tag2", "tag3"],
 			});
 
-			await store.updateMetadata(record.id, {
+			await store.update(record.id, {
 				tags: ["tag1"],
 			});
 
@@ -317,7 +315,7 @@ describe("RedisStore", () => {
 				tags: ["tag1", "tag2"],
 			});
 
-			await store.updateMetadata(record.id, {
+			await store.update(record.id, {
 				tags: [],
 			});
 
@@ -335,7 +333,7 @@ describe("RedisStore", () => {
 				tags: ["old1", "old2"],
 			});
 
-			await store.updateMetadata(record.id, {
+			await store.update(record.id, {
 				tags: ["new1", "new2"],
 			});
 
@@ -363,7 +361,7 @@ describe("RedisStore", () => {
 			expect(foundBefore).not.toBeNull();
 
 			// Revoke the key
-			await store.updateMetadata(record.id, {
+			await store.update(record.id, {
 				revokedAt: new Date().toISOString(),
 			});
 
@@ -374,7 +372,7 @@ describe("RedisStore", () => {
 			// But the record itself should still exist
 			const recordById = await store.findById(record.id);
 			expect(recordById).not.toBeNull();
-			expect(recordById?.metadata.revokedAt).toBeDefined();
+			expect(recordById?.revokedAt).toBeDefined();
 		});
 
 		it("should handle case-insensitive tags", async () => {
@@ -613,7 +611,7 @@ describe("RedisStore", () => {
 			);
 
 			const promises = records.map((r, i) =>
-				store.updateMetadata(r.record.id, {
+				store.update(r.record.id, {
 					name: `Updated ${i}`,
 				})
 			);
@@ -626,7 +624,7 @@ describe("RedisStore", () => {
 					continue;
 				}
 				const found = await store.findById(record.record.id);
-				expect(found?.metadata.name).toBe(`Updated ${i}`);
+				expect(found?.name).toBe(`Updated ${i}`);
 			}
 		});
 
@@ -654,17 +652,17 @@ describe("RedisStore", () => {
 
 			// Try to update tags concurrently
 			const promises = [
-				store.updateMetadata(record.id, { tags: ["tag1"] }),
-				store.updateMetadata(record.id, { tags: ["tag2"] }),
-				store.updateMetadata(record.id, { tags: ["tag3"] }),
+				store.update(record.id, { tags: ["tag1"] }),
+				store.update(record.id, { tags: ["tag2"] }),
+				store.update(record.id, { tags: ["tag3"] }),
 			];
 
 			await Promise.all(promises);
 
 			// Should end up with one of the tags
 			const found = await store.findById(record.id);
-			expect(found?.metadata.tags).toBeDefined();
-			expect(Array.isArray(found?.metadata.tags)).toBe(true);
+			expect(found?.tags).toBeDefined();
+			expect(Array.isArray(found?.tags)).toBe(true);
 		});
 	});
 });

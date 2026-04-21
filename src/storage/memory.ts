@@ -1,4 +1,4 @@
-import type { ApiKeyMetadata, ApiKeyRecord } from "../types/api-key-types";
+import type { ApiKeyMutableFields, ApiKeyRecord } from "../types/api-key-types";
 import type {
 	AuditLog,
 	AuditLogQuery,
@@ -25,7 +25,7 @@ export class MemoryStore implements Storage {
 		this.keys.set(record.id, record);
 		this.hashIndex.set(record.keyHash, record.id);
 
-		const { ownerId, tags } = record.metadata;
+		const { ownerId, tags } = record;
 		if (ownerId) {
 			const ownerKeys = this.ownerIndex.get(ownerId) ?? new Set();
 			ownerKeys.add(record.id);
@@ -65,7 +65,6 @@ export class MemoryStore implements Storage {
 	async findByTags(tags: string[], ownerId?: string): Promise<ApiKeyRecord[]> {
 		const lowercaseTags = tags.map((t) => t.toLowerCase());
 
-		// Use tag index for fast lookup
 		const matchingIds = new Set<string>();
 		for (const tag of lowercaseTags) {
 			const ids = this.tagIndex.get(tag);
@@ -79,7 +78,10 @@ export class MemoryStore implements Storage {
 		const records: ApiKeyRecord[] = [];
 		for (const id of matchingIds) {
 			const record = this.keys.get(id);
-			if (record && (ownerId === undefined || record.metadata.ownerId === ownerId)) {
+			if (
+				record &&
+				(ownerId === undefined || record.ownerId === ownerId)
+			) {
 				records.push(record);
 			}
 		}
@@ -94,29 +96,31 @@ export class MemoryStore implements Storage {
 		const records: ApiKeyRecord[] = [];
 		for (const id of ids) {
 			const record = this.keys.get(id);
-			if (record && (ownerId === undefined || record.metadata.ownerId === ownerId)) {
+			if (
+				record &&
+				(ownerId === undefined || record.ownerId === ownerId)
+			) {
 				records.push(record);
 			}
 		}
 		return records;
 	}
 
-	async updateMetadata(
+	async update(
 		id: string,
-		metadata: Partial<ApiKeyMetadata>
+		fields: Partial<ApiKeyMutableFields>
 	): Promise<void> {
 		const record = this.keys.get(id);
 		if (!record) {
 			throw new Error(`API key with id ${id} not found`);
 		}
 
-		const oldOwnerId = record.metadata.ownerId;
-		const oldTags = record.metadata.tags;
-		record.metadata = { ...record.metadata, ...metadata };
-		const newOwnerId = record.metadata.ownerId;
-		const newTags = record.metadata.tags;
+		const oldOwnerId = record.ownerId;
+		const oldTags = record.tags;
+		Object.assign(record, fields);
+		const newOwnerId = record.ownerId;
+		const newTags = record.tags;
 
-		// Update owner index if changed
 		if (oldOwnerId !== newOwnerId) {
 			if (oldOwnerId) {
 				const oldOwnerKeys = this.ownerIndex.get(oldOwnerId);
@@ -130,9 +134,7 @@ export class MemoryStore implements Storage {
 			}
 		}
 
-		// Update tag index if tags changed
-		if (metadata.tags !== undefined) {
-			// Remove old tags from index
+		if (fields.tags !== undefined) {
 			if (oldTags) {
 				for (const tag of oldTags) {
 					const tagKeys = this.tagIndex.get(tag);
@@ -140,7 +142,6 @@ export class MemoryStore implements Storage {
 					if (tagKeys?.size === 0) this.tagIndex.delete(tag);
 				}
 			}
-			// Add new tags to index
 			if (newTags) {
 				for (const tag of newTags) {
 					const tagKeys = this.tagIndex.get(tag) ?? new Set();
@@ -155,13 +156,12 @@ export class MemoryStore implements Storage {
 		const record = this.keys.get(id);
 		if (record) {
 			this.hashIndex.delete(record.keyHash);
-			const { ownerId, tags } = record.metadata;
+			const { ownerId, tags } = record;
 			if (ownerId) {
 				const ownerKeys = this.ownerIndex.get(ownerId);
 				ownerKeys?.delete(id);
 				if (ownerKeys?.size === 0) this.ownerIndex.delete(ownerId);
 			}
-			// Clean up tag index
 			if (tags) {
 				for (const tag of tags) {
 					const tagKeys = this.tagIndex.get(tag);
@@ -181,9 +181,8 @@ export class MemoryStore implements Storage {
 			const record = this.keys.get(id);
 			if (record) {
 				this.hashIndex.delete(record.keyHash);
-				// Clean up tag index
-				if (record.metadata.tags) {
-					for (const tag of record.metadata.tags) {
+				if (record.tags) {
+					for (const tag of record.tags) {
 						const tagKeys = this.tagIndex.get(tag);
 						tagKeys?.delete(id);
 						if (tagKeys?.size === 0) this.tagIndex.delete(tag);

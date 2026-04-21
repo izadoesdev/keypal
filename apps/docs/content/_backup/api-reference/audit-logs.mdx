@@ -1,0 +1,126 @@
+---
+title: Audit Logs
+description: Query and manage audit logs
+icon: FileSearch
+---
+
+# Audit Logs
+
+Methods for querying and managing audit logs (requires `auditLogs: true` in configuration).
+
+## getLogs()
+
+Query audit logs.
+
+```typescript
+// Get logs for a specific key
+const logs = await keys.getLogs({
+  keyId: 'key_123',
+  limit: 100,
+})
+
+// Get logs by action
+const revokedLogs = await keys.getLogs({
+  action: 'revoked',
+  startDate: '2025-01-01',
+})
+
+// Get logs for an owner
+const ownerLogs = await keys.getLogs({
+  ownerId: 'user_123',
+  limit: 50,
+  offset: 0,
+})
+```
+
+**Returns**: `Promise<AuditLog[]>`
+
+### AuditLogQuery Options
+
+```typescript
+{
+  keyId?: string          // Filter by key ID
+  ownerId?: string       // Filter by owner ID
+  action?: AuditAction   // Filter by action
+  startDate?: string     // Filter by start date (ISO timestamp)
+  endDate?: string       // Filter by end date (ISO timestamp)
+  limit?: number         // Maximum results (default: 100)
+  offset?: number        // Pagination offset (default: 0)
+}
+```
+
+## countLogs()
+
+Count audit logs matching a query.
+
+```typescript
+const count = await keys.countLogs({
+  action: 'created',
+  startDate: '2025-01-01',
+})
+```
+
+**Returns**: `Promise<number>`
+
+## deleteLogs()
+
+Delete audit logs matching a query.
+
+```typescript
+// Delete old logs
+const deleted = await keys.deleteLogs({
+  endDate: '2024-01-01',
+})
+```
+
+**Returns**: `Promise<number>` (number of logs deleted)
+
+## clearLogs()
+
+Clear all logs for a specific key.
+
+```typescript
+await keys.clearLogs('key_123')
+```
+
+**Returns**: `Promise<number>` (number of logs deleted)
+
+## getLogStats()
+
+Get statistics about audit logs for an owner.
+
+```typescript
+const stats = await keys.getLogStats('user_123')
+
+console.log(stats.total)              // Total number of logs
+console.log(stats.byAction.created)   // Number of created actions
+console.log(stats.byAction.revoked)   // Number of revoked actions
+console.log(stats.lastActivity)      // Last activity timestamp
+```
+
+**Returns**: `Promise<AuditLogStats>`
+
+### AuditLogStats Structure
+
+```typescript
+{
+  total: number
+  byAction: {
+    created?: number
+    revoked?: number
+    rotated?: number
+    enabled?: number
+    disabled?: number
+  }
+  lastActivity: string | null
+}
+```
+
+## Audit Actions
+
+- `'created'` - Key was created
+- `'revoked'` - Key was revoked
+- `'rotated'` - Key was rotated
+- `'enabled'` - Key was enabled
+- `'disabled'` - Key was disabled
+

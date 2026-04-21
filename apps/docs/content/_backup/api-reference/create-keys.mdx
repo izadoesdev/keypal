@@ -1,0 +1,72 @@
+---
+title: createKeys()
+description: Create a new API key manager instance
+icon: KeyRound
+---
+
+# createKeys()
+
+Creates a new API key manager instance.
+
+## Signature
+
+```typescript
+function createKeys(config?: ConfigInput): ApiKeyManager
+```
+
+## Parameters
+
+- **`config`** (ConfigInput, optional): Configuration options
+
+## Returns
+
+An `ApiKeyManager` instance for creating and verifying keys.
+
+## Examples
+
+### Basic Usage
+
+```typescript
+import { createKeys } from 'keypal'
+
+const keys = createKeys({
+  prefix: 'sk_',
+})
+```
+
+### With Redis Storage
+
+```typescript
+import Redis from 'ioredis'
+
+const redis = new Redis()
+
+const keys = createKeys({
+  prefix: 'sk_live_',
+  storage: 'redis',
+  redis,
+  cache: true,
+  cacheTtl: 300,
+})
+```
+
+### With Custom Storage
+
+```typescript
+import { createKeys, type Storage } from 'keypal'
+
+const customStorage: Storage = {
+  save: async (record) => { /* ... */ },
+  findByHash: async (keyHash) => { /* ... */ },
+  // ... other methods
+}
+
+const keys = createKeys({
+  storage: customStorage,
+})
+```
+
+## Configuration Options
+
+See the [Configuration](/docs/getting-started/configuration) guide for all available options.
+

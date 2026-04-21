@@ -1,0 +1,139 @@
+---
+title: Permissions
+description: Check permissions and scopes
+icon: ShieldCheck
+---
+
+# Permissions
+
+Methods for checking permissions and scopes.
+
+## Global Scope Checks
+
+### hasScope()
+
+Check if a key has a specific scope.
+
+```typescript
+if (keys.hasScope(record, 'write')) {
+  // Key has write permission
+}
+```
+
+**Returns**: `boolean`
+
+### hasAnyScope()
+
+Check if a key has any of the specified scopes.
+
+```typescript
+if (keys.hasAnyScope(record, ['admin', 'moderator'])) {
+  // Key has admin or moderator permission
+}
+```
+
+**Returns**: `boolean`
+
+### hasAllScopes()
+
+Check if a key has all of the specified scopes.
+
+```typescript
+if (keys.hasAllScopes(record, ['read', 'write'])) {
+  // Key has both read and write permissions
+}
+```
+
+**Returns**: `boolean`
+
+## Resource Scope Checks
+
+### checkResourceScope()
+
+Check if a key has a specific scope for a resource.
+
+```typescript
+if (keys.checkResourceScope(record, 'project', '123', 'write')) {
+  // Key has write permission for project 123
+}
+```
+
+**Returns**: `boolean`
+
+### checkResourceAnyScope()
+
+Check if a key has any of the specified scopes for a resource.
+
+```typescript
+if (keys.checkResourceAnyScope(record, 'project', '123', ['admin', 'write'])) {
+  // Key has admin or write permission for project 123
+}
+```
+
+**Returns**: `boolean`
+
+### checkResourceAllScopes()
+
+Check if a key has all of the specified scopes for a resource (checks both global and resource scopes).
+
+```typescript
+if (keys.checkResourceAllScopes(record, 'project', '123', ['read', 'write'])) {
+  // Key has both read and write permissions (from global or resource scopes)
+}
+```
+
+**Returns**: `boolean`
+
+## Expiration Check
+
+### isExpired()
+
+Check if a key has expired.
+
+```typescript
+if (keys.isExpired(record)) {
+  // Key has expired
+}
+```
+
+**Returns**: `boolean`
+
+## Usage Examples
+
+### Middleware Example
+
+```typescript
+app.use('/api/*', async (req, res, next) => {
+  const result = await keys.verify(req.headers)
+  
+  if (!result.valid) {
+    return res.status(401).json({ error: result.error })
+  }
+  
+  req.apiKey = result.record
+  next()
+})
+
+app.get('/api/data', (req, res) => {
+  if (!keys.hasScope(req.apiKey, 'read')) {
+    return res.status(403).json({ error: 'Insufficient permissions' })
+  }
+  
+  res.json({ data: 'sensitive data' })
+})
+```
+
+### Resource-Specific Access
+
+```typescript
+app.get('/api/projects/:id', async (req, res) => {
+  const projectId = req.params.id
+  
+  if (!keys.checkResourceScope(req.apiKey, 'project', projectId, 'read')) {
+    return res.status(403).json({ error: 'No access to this project' })
+  }
+  
+  res.json({ project: { id: projectId } })
+})
+```
+

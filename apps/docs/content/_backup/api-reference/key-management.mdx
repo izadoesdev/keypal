@@ -1,0 +1,157 @@
+---
+title: Key Management
+description: Create, list, find, and manage API keys
+icon: KeyRound
+---
+
+# Key Management
+
+Methods for creating, listing, finding, and managing API keys.
+
+## create()
+
+Create a new API key.
+
+```typescript
+const { key, record } = await keys.create({
+  ownerId: 'user_123',
+  name: 'Production Key',
+  description: 'Key for production API access',
+  scopes: ['read', 'write'],
+  tags: ['production', 'api'],
+  resources: {
+    'project:123': ['read', 'write'],
+  },
+  expiresAt: '2025-12-31',
+  enabled: true,
+})
+```
+
+**Returns**: `{ key: string, record: ApiKeyRecord }`
+
+> **Important**: The `key` is only returned once during creation. Store it securely!
+
+## list()
+
+List all keys for an owner.
+
+```typescript
+const userKeys = await keys.list('user_123')
+```
+
+**Returns**: `Promise<ApiKeyRecord[]>`
+
+## findById()
+
+Find a key by its ID.
+
+```typescript
+const keyRecord = await keys.findById('key_123')
+```
+
+**Returns**: `Promise<ApiKeyRecord | null>`
+
+## findByHash()
+
+Find a key by its hash.
+
+```typescript
+const keyByHash = await keys.findByHash('hashed_key_value')
+```
+
+**Returns**: `Promise<ApiKeyRecord | null>`
+
+## findByTag()
+
+Find keys with a specific tag.
+
+```typescript
+const taggedKeys = await keys.findByTag('production')
+const userTaggedKeys = await keys.findByTag('production', 'user_123')
+```
+
+**Returns**: `Promise<ApiKeyRecord[]>`
+
+## findByTags()
+
+Find keys with any of the specified tags.
+
+```typescript
+const taggedKeys = await keys.findByTags(['production', 'staging'])
+const userTaggedKeys = await keys.findByTags(['production', 'staging'], 'user_123')
+```
+
+**Returns**: `Promise<ApiKeyRecord[]>`
+
+## revoke()
+
+Revoke (soft delete) a key.
+
+```typescript
+await keys.revoke('key_123', {
+  userId: 'admin_456',
+  metadata: { reason: 'Security breach' },
+})
+```
+
+**Returns**: `Promise<void>`
+
+## revokeAll()
+
+Revoke all keys for an owner.
+
+```typescript
+await keys.revokeAll('user_123')
+```
+
+**Returns**: `Promise<void>`
+
+## enable()
+
+Enable a disabled key.
+
+```typescript
+await keys.enable('key_123', {
+  userId: 'admin_456',
+})
+```
+
+**Returns**: `Promise<void>`
+
+## disable()
+
+Disable a key.
+
+```typescript
+await keys.disable('key_123', {
+  userId: 'admin_456',
+})
+```
+
+**Returns**: `Promise<void>`
+
+## rotate()
+
+Rotate a key (create new, mark old as revoked).
+
+```typescript
+const { key: newKey, record: newRecord, oldRecord } = await keys.rotate('key_123', {
+  name: 'Updated Key',
+  scopes: ['read', 'write', 'admin'],
+})
+```
+
+**Returns**: `Promise<{ key: string, record: ApiKeyRecord, oldRecord: ApiKeyRecord }>`
+
+## updateLastUsed()
+
+Manually update the last used timestamp.
+
+```typescript
+await keys.updateLastUsed('key_123')
+```
+
+**Returns**: `Promise<void>`
+
+> **Note**: This is automatically called when `autoTrackUsage` is enabled and `skipTracking` is not set.
+

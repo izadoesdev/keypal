@@ -1,0 +1,96 @@
+---
+title: Verification
+description: Verify API keys from headers or strings
+icon: CheckCircle
+---
+
+# Verification
+
+Methods for verifying API keys from HTTP headers or strings.
+
+## verify()
+
+Verify an API key from headers or a string.
+
+```typescript
+// From headers (automatic detection)
+const result = await keys.verify(request.headers)
+
+// From string
+const result = await keys.verify('sk_abc123')
+
+// From Bearer token
+const result = await keys.verify('Bearer sk_abc123')
+```
+
+**Returns**: `Promise<VerifyResult>`
+
+### VerifyResult
+
+```typescript
+{
+  valid: boolean
+  record?: ApiKeyRecord
+  error?: string
+  errorCode?: ApiKeyErrorCode
+}
+```
+
+### VerifyOptions
+
+```typescript
+const result = await keys.verify(headers, {
+  skipCache: true,        // Skip cache lookup
+  headerNames: ['x-custom-key'], // Override header names
+  extractBearer: true,    // Override extractBearer behavior
+  skipTracking: true,     // Skip updating lastUsedAt
+})
+```
+
+## verifyFromHeaders()
+
+Convenience method that calls `verify()` with headers.
+
+```typescript
+const result = await keys.verifyFromHeaders(request.headers)
+```
+
+**Returns**: `Promise<VerifyResult>`
+
+## Handling Results
+
+```typescript
+const result = await keys.verify(request.headers)
+
+if (result.valid) {
+  console.log('Authenticated:', result.record.metadata.ownerId)
+  console.log('Scopes:', result.record.metadata.scopes)
+} else {
+  console.log('Error:', result.error)
+  console.log('Error Code:', result.errorCode)
+  
+  // Handle specific error codes
+  switch (result.errorCode) {
+    case ApiKeyErrorCode.EXPIRED:
+      // Handle expired key
+      break
+    case ApiKeyErrorCode.REVOKED:
+      // Handle revoked key
+      break
+    case ApiKeyErrorCode.DISABLED:
+      // Handle disabled key
+      break
+    // ... other error codes
+  }
+}
+```
+
+## Error Codes
+
+- `MISSING_KEY` - No API key provided
+- `INVALID_FORMAT` - API key format is invalid
+- `INVALID_KEY` - API key does not exist
+- `EXPIRED` - API key has expired
+- `REVOKED` - API key has been revoked
+- `DISABLED` - API key is disabled
+

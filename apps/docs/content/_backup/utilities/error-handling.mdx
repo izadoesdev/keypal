@@ -11,9 +11,7 @@ keypal provides comprehensive error handling with specific error codes for diffe
 ## Error Codes
 
 ```typescript
-/**
- * import { ApiKeyErrorCode } from 'keypal'
- */
+import { ApiKeyErrorCode } from 'keypal'
 
 // All available error codes:
 ApiKeyErrorCode.MISSING_KEY              // No API key provided
@@ -144,9 +142,7 @@ try {
 ## Creating Custom Errors
 
 ```typescript
-/**
- * import { createApiKeyError, ApiKeyErrorCode } from 'keypal'
- */
+import { createApiKeyError, ApiKeyErrorCode } from 'keypal'
 
 const error = createApiKeyError(ApiKeyErrorCode.INVALID_KEY, {
   attemptedKey: 'sk_abc123',
@@ -164,9 +160,7 @@ const error = createApiKeyError(ApiKeyErrorCode.INVALID_KEY, {
 ## Error Type
 
 ```typescript
-/**
- * import type { ApiKeyError } from 'keypal'
- */
+import type { ApiKeyError } from 'keypal'
 
 // ApiKeyError structure:
 {

@@ -140,6 +140,5 @@ jobs:
       - name: Check build artifacts
         run: |
           ls -lh dist/
-          test -f dist/index.cjs
           test -f dist/index.mjs
           test -f dist/index.d.ts

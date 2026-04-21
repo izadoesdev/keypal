@@ -479,7 +479,7 @@ describe("KyselyStore", () => {
 				resources: {
 					"project:123": ["read"],
 				},
-				expiresAt: "2025-12-31T00:00:00.000Z",
+				expiresAt: "2099-12-31T00:00:00.000Z",
 				enabled: true,
 			});
 
@@ -492,7 +492,7 @@ describe("KyselyStore", () => {
 			expect(found?.description).toBe("Testing all fields");
 			expect(found?.scopes).toEqual(["read", "write", "admin"]);
 			expect(found?.enabled).toBe(true);
-			expect(found?.expiresAt).toBe("2025-12-31T00:00:00.000Z");
+			expect(found?.expiresAt).toBe("2099-12-31T00:00:00.000Z");
 		});
 	});
 

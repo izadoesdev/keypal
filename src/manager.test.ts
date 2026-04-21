@@ -135,7 +135,7 @@ describe("ApiKeyManager", () => {
 		});
 
 		it("should create a key with expiration", async () => {
-			const expiresAt = new Date("2025-12-31");
+			const expiresAt = new Date("2099-12-31");
 
 			const { record } = await keys.create({
 				ownerId: "user_expires",
